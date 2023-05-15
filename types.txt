@@ -1,0 +1,13 @@
+create type BookingType as enum ('STD', 'TLB', 'LEC', 'BLOCK', 'SOCIETY', 'SEM', 'WKS', 'OTH', 'LAB', 'EXM', 'LE0', 'MISC', 'INTERNAL', 'LA1', 'TUT', 'LE2')
+
+create table Bookings (
+	id		serial,
+	type    BookingType,
+	name    text not null,
+	roomId  text not null,
+	start	date,
+	finish	date,
+	primary key (id)
+);
+
+
