@@ -4,7 +4,7 @@
 
 --  DROP TABLE RoomBookings;
  CREATE TABLE RoomBookings (
-    'id'            SERIAL PRIMARY KEY ,
+    'id'            SERIAL PRIMARY KEY,
     'bookingType'   BookingTypeEnum,
     'name'          TEXT NOT NULL,
     'roomId'        TEXT NOT NULL,
