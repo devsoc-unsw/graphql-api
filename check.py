@@ -9,7 +9,7 @@ data = json.load(f)
 
 def get_query_values():
     values = []
-    for id, booking in enumerate(data):
+    for booking in data:
         tp, name, room_id, start, end = booking.values()
         values.append((tp, name, room_id, start, end))
     return values
