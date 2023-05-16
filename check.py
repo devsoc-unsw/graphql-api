@@ -4,10 +4,10 @@ import json
 import psycopg2
 from psycopg2 import Error
 
-f = open('bookings.json')
-data = json.load(f)
 
 def get_query_values():
+    f = open('bookings.json')
+    data = json.load(f)
     values = []
     for booking in data:
         tp, name, room_id, start, end = booking.values()

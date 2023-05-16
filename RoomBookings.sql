@@ -4,10 +4,10 @@
 
 --  DROP TABLE RoomBookings;
  CREATE TABLE RoomBookings (
- 	Id		        SERIAL PRIMARY KEY ,
+ 	Id		          SERIAL PRIMARY KEY ,
  	BookingType     BookingTypeEnum,
  	Name            TEXT NOT NULL,
  	RoomId          TEXT NOT NULL,
- 	Start	        TIMESTAMP,
+ 	Start	          TIMESTAMP,
  	Finish	        TIMESTAMP
  );
