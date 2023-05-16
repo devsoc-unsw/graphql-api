@@ -13,6 +13,7 @@ def get_query_values():
         tp, name, room_id, start, end = booking.values()
         values.append((tp, name, room_id, start, end))
     return values
+
 try:
     connection = psycopg2.connect(user="postgres",
                                   password="postgrespassword",
