@@ -7,6 +7,9 @@ services:
       - db_data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=sl-SI"
+    ports:
+      - "5432:5432"
   graphql-engine:
     image: hasura/graphql-engine:v2.25.0
     ports:
