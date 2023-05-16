@@ -21,15 +21,9 @@ try:
                                   database="postgres")
 
     cursor = connection.cursor()
-    cmd = "INSERT INTO RoomBookings(BOOKINGTYPE, NAME, ROOMID, START, FINISH) VALUES (%s, %s, %s, %s, %s)"
-    print(get_query_values())
+    cmd = "INSERT INTO RoomBookings(BOOKINGTYPE, NAME, ROOMID, START, END) VALUES (%s, %s, %s, %s, %s)"
     cursor.executemany(cmd, get_query_values())
     connection.commit()
-    # cursor.execute("SELECT * FROM ROOMBOOKINGS;")
-    # row = cursor.fetchone()
-    # while row is not None:
-    #     print(row)
-    #     row = cursor.fetchone()
 except (Exception, Error) as error:
     print("Error while connecting to PostgreSQL", error)
 finally:
