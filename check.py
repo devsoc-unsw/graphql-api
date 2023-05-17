@@ -34,7 +34,7 @@ def insert_bookings(cursor):
     with open('bookings.json') as f:
         data = json.load(f)
     values = [(
-        booking['type'],
+        booking['bookingType'],
         booking['name'],
         booking['roomId'],
         booking['start'],
