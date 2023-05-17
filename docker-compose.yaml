@@ -5,21 +5,24 @@ services:
     restart: always
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./db_dump:/docker-entrypoint-initdb.d/
     environment:
-      POSTGRES_PASSWORD: postgrespassword
       POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=sl-SI"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: db_data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+
   graphql-engine:
     image: hasura/graphql-engine:v2.25.0
     ports:
       - "8080:8080"
     restart: always
     environment:
-      ## postgres database to store Hasura metadata
-      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
-      ## this env var can be used to add the above postgres database to Hasura as a data source. this can be removed/updated based on your needs
-      PG_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      PG_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
       ## enable the console served by server
       HASURA_GRAPHQL_ENABLE_CONSOLE: "true" # set to "false" to disable console
       ## enable debugging mode. It is recommended to disable this in production
@@ -33,11 +36,12 @@ services:
     depends_on:
       data-connector-agent:
         condition: service_healthy
+
   data-connector-agent:
     image: hasura/graphql-data-connector:v2.23.0
     restart: always
     ports:
-      - 8081:8081
+      - "8081:8081"
     environment:
       QUARKUS_LOG_LEVEL: ERROR # FATAL, ERROR, WARN, INFO, DEBUG, TRACE
       ## https://quarkus.io/guides/opentelemetry#configuration-reference

@@ -1,6 +1,8 @@
 import json
 import psycopg2
 from psycopg2 import Error
+import os
+from dotenv import load_dotenv
 
 def insert_buildings(cursor):
     with open('buildings.json') as f:
@@ -32,7 +34,7 @@ def insert_bookings(cursor):
     with open('bookings.json') as f:
         data = json.load(f)
     values = [(
-        booking['bookingType'],
+        booking['type'],
         booking['name'],
         booking['roomId'],
         booking['start'],
@@ -44,14 +46,16 @@ def insert_bookings(cursor):
 
 
 if __name__ == '__main__':
+    connection = None
+    cursor = None
+    load_dotenv()
     try:
-        connection = psycopg2.connect(user="postgres",
-                                      password="postgrespassword",
+        connection = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
+                                      password=os.environ.get('POSTGRES_PASSWORD'),
                                       host="127.0.0.1",
-                                      port="5432",
-                                      database="postgres")
+                                      port=os.environ.get('POSTGRES_PORT'),
+                                      database=os.environ.get('POSTGRES_DB'))
         cursor = connection.cursor()
-
         insert_buildings(cursor)
         connection.commit()
 
