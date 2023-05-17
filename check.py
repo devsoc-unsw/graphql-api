@@ -23,7 +23,7 @@ def insert_rooms(cursor):
         room['usage'],
         room['capacity'],
         room['school'],
-        '-'.join(room['id'].split('-')[:1])
+        '-'.join(room['id'].split('-')[:2])
     ) for room in data]
 
     cmd = 'INSERT INTO Rooms("id", "name", "abbr", "usage", "capacity", "school", "buildingId") VALUES (%s, %s, %s, %s, %s, %s, %s)'
@@ -34,7 +34,7 @@ def insert_bookings(cursor):
     with open('bookings.json') as f:
         data = json.load(f)
     values = [(
-        booking['bookingType'],
+        booking['type'],
         booking['name'],
         booking['roomId'],
         booking['start'],
