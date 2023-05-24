@@ -3,9 +3,11 @@ import psycopg2
 from psycopg2 import Error
 import os
 from dotenv import load_dotenv
+import docker
+from docker.types import Mount
 
 def insert_buildings(cursor):
-    with open('buildings.json') as f:
+    with open('output/nss-scraper/buildings.json') as f:
         data = json.load(f)
     values = [(bldg['id'], bldg['name'], bldg['lat'], bldg['long']) for bldg in data]
 
@@ -14,7 +16,7 @@ def insert_buildings(cursor):
 
 
 def insert_rooms(cursor):
-    with open('rooms.json') as f:
+    with open('output/nss-scraper/rooms.json') as f:
         data = json.load(f)
     values = [(
         room['id'],
@@ -31,7 +33,7 @@ def insert_rooms(cursor):
 
 
 def insert_bookings(cursor):
-    with open('bookings.json') as f:
+    with open('output/nss-scraper/bookings.json') as f:
         data = json.load(f)
     values = [(
         booking['type'],
@@ -49,10 +51,20 @@ if __name__ == '__main__':
     connection = None
     cursor = None
     load_dotenv()
+    client = docker.from_env()
+    client.login(
+        username=os.environ.get('DOCKER_REGISTRY_USER'),
+        password=os.environ.get('DOCKER_REGISTRY_PASSWORD'),
+        registry=os.environ.get('DOCKER_REGISTERY_URL')
+    )
+    container = client.containers.run(
+        os.environ.get('DOCKER_REGISTRY_USER') + "/nss-scraper-scraper",
+        mounts=[Mount("/app/output", os.getcwd() + "/output/nss-scraper", 'bind')]
+    )
     try:
         connection = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
                                       password=os.environ.get('POSTGRES_PASSWORD'),
-                                      host="127.0.0.1",
+                                      host="postgres",
                                       port=os.environ.get('POSTGRES_PORT'),
                                       database=os.environ.get('POSTGRES_DB'))
         cursor = connection.cursor()
@@ -67,7 +79,7 @@ if __name__ == '__main__':
     except (Exception, Error) as error:
         print("Error while connecting to PostgreSQL", error)
     finally:
-        if (connection):
+        if connection:
             cursor.close()
             connection.close()
             print("PostgreSQL connection is closed")
