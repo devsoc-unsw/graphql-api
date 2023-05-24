@@ -1,11 +1,22 @@
 version: "3.6"
 services:
+  hasuragres:
+    build: .
+    privileged: true
+    volumes:
+      - ./output:/app/output
+    networks:
+      - hasuragres_network
+    depends_on:
+      - graphql-engine
   postgres:
     image: postgres:alpine
     restart: always
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db_dump:/docker-entrypoint-initdb.d/
+    networks:
+      - hasuragres_network
     environment:
       POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=sl-SI"
       POSTGRES_DB: ${POSTGRES_DB}
@@ -20,6 +31,8 @@ services:
     ports:
       - "8080:8080"
     restart: always
+    networks:
+      - hasuragres_network
     environment:
       HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
       PG_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
@@ -42,6 +55,8 @@ services:
     restart: always
     ports:
       - "8081:8081"
+    networks:
+      - hasuragres_network
     environment:
       QUARKUS_LOG_LEVEL: ERROR # FATAL, ERROR, WARN, INFO, DEBUG, TRACE
       ## https://quarkus.io/guides/opentelemetry#configuration-reference
@@ -53,5 +68,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 5s
+
 volumes:
   db_data:
+
+networks:
+  hasuragres_network:
