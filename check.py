@@ -43,7 +43,7 @@ def insert_bookings(cursor):
         booking['end']
     ) for booking in data]
 
-    cmd = 'INSERT INTO RoomBookings("bookingType", "name", "roomId", "start", "end") VALUES (%s, %s, %s, %s, %s)'
+    cmd = 'INSERT INTO Bookings("bookingType", "name", "roomId", "start", "end") VALUES (%s, %s, %s, %s, %s)'
     cursor.executemany(cmd, values)
 
 
