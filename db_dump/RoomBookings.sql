@@ -9,7 +9,7 @@
 
 --  DROP TABLE RoomBookings CASCADE;
 --  ALTER TABLE Rooms ADD FOREIGN KEY ("buildingId") REFERENCES Buildings("id") ON DELETE CASCADE;
- CREATE TABLE  IF NOT EXISTS Rooms (
+ CREATE TABLE IF NOT EXISTS Rooms (
 	"id"			TEXT PRIMARY KEY,
 	"name"			TEXT NOT NULL,
 	"abbr"			TEXT NOT NULL,	
@@ -23,9 +23,8 @@
 --  DROP TYPE BookingTypeEnum CASCADE;
  CREATE TYPE BookingTypeEnum AS ENUM ('CLASS', 'BLOCK', 'SOCIETY', 'MISC', 'INTERNAL');
 
---  DROP TABLE RoomBookings;
---  ALTER TABLE RoomBookings ADD FOREIGN KEY ("roomId") REFERENCES Rooms("id") ON DELETE CASCADE;
- CREATE TABLE  IF NOT EXISTS RoomBookings (
+--  DROP TABLE Bookings;
+ CREATE TABLE IF NOT EXISTS Bookings (
     "id"            SERIAL PRIMARY KEY,
     "bookingType"   BookingTypeEnum,
     "name"          TEXT NOT NULL,
@@ -34,3 +33,5 @@
     "end"           TIMESTAMPTZ NOT NULL,
      FOREIGN KEY ("roomId") REFERENCES Rooms("id") ON DELETE CASCADE
  );
+
+CREATE INDEX bookings_start_end ON Bookings ("start", "end")
