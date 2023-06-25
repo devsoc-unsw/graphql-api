@@ -9,9 +9,9 @@ from docker.types import Mount
 def insert_buildings(cursor):
     with open('output/nss-scraper/buildings.json') as f:
         data = json.load(f)
-    values = [(bldg['id'], bldg['name'], bldg['lat'], bldg['long']) for bldg in data]
+    values = [(bldg['id'], bldg['name'], bldg['lat'], bldg['long'], bldg['aliases']) for bldg in data]
 
-    cmd = 'INSERT INTO Buildings("id", "name", "lat", "long") VALUES (%s, %s, %s, %s)'
+    cmd = 'INSERT INTO Buildings("id", "name", "lat", "long", "aliases") VALUES (%s, %s, %s, %s, %s)'
     cursor.executemany(cmd, values)
 
 
