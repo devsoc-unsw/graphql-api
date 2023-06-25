@@ -1,10 +1,11 @@
 
 --  DROP TABLE Buildings CASCADE;
  CREATE TABLE IF NOT EXISTS Buildings (
-	"id"	TEXT PRIMARY KEY,
-	"name"	TEXT NOT NULL,
-	"lat"	DOUBLE PRECISION NOT NULL,
-	"long"	DOUBLE PRECISION NOT NULL
+	"id"	    TEXT PRIMARY KEY,
+	"name"	    TEXT NOT NULL,
+	"lat"	    DOUBLE PRECISION NOT NULL,
+	"long"	    DOUBLE PRECISION NOT NULL,
+ 	"aliases"   TEXT[] NOT NULL
  );
 
 --  DROP TABLE RoomBookings CASCADE;
