@@ -9,12 +9,12 @@ services:
       - hasuragres_network
     depends_on:
       - graphql-engine
+
   postgres:
     image: postgres:alpine
     restart: always
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./db_dump:/docker-entrypoint-initdb.d/
     networks:
       - hasuragres_network
     environment:
@@ -27,10 +27,13 @@ services:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
 
   graphql-engine:
-    image: hasura/graphql-engine:v2.25.0
+    image: hasura/graphql-engine:v2.25.0.cli-migrations-v3
     ports:
       - "8080:8080"
     restart: always
+    volumes:
+      - ./migrations:/hasura-migrations
+      - ./metadata:/hasura-metadata
     networks:
       - hasuragres_network
     environment:
