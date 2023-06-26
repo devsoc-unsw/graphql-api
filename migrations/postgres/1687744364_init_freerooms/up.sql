@@ -1,3 +1,5 @@
+-- SQL to set up Freerooms tables
+
 CREATE TABLE Buildings (
     "id"        TEXT PRIMARY KEY,
     "name"      TEXT NOT NULL,
@@ -5,7 +7,6 @@ CREATE TABLE Buildings (
     "long"      DOUBLE PRECISION NOT NULL,
     "aliases"   TEXT[] NOT NULL
 );
-
 
 CREATE TABLE Rooms (
     "id"            TEXT PRIMARY KEY,
