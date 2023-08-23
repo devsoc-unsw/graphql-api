@@ -3,12 +3,13 @@ services:
   hasuragres:
     build: .
     privileged: true
-    volumes:
-      - ./output:/app/output
+    ports:
+      - "8000:8000"
     networks:
       - hasuragres_network
     depends_on:
       - graphql-engine
+      - postgres
   postgres:
     image: postgres:alpine
     restart: always
