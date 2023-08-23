@@ -1,0 +1,11 @@
+table:
+  name: buildings
+  schema: public
+array_relationships:
+  - name: rooms
+    using:
+      foreign_key_constraint_on:
+        column: buildingId
+        table:
+          name: rooms
+          schema: public
