@@ -45,7 +45,7 @@ except (Exception, Error) as error:
     exit(1)
 
 
-def create_table(metadata: Metadata, hasura_actions: list):
+def create_table(metadata: Metadata) -> bool:
     """
     Create table as specified in metadata.
 
@@ -53,7 +53,7 @@ def create_table(metadata: Metadata, hasura_actions: list):
     sql_up has been changed, run the stored sql_drop, and create table
     as specified in new sql_up.
 
-    Also tracks the table on Hasura.
+    Returns whether the table was created or not.
     """
     cmd = f"SELECT up, down FROM Tables WHERE table_name = %s"
     metadata.table_name = metadata.table_name.lower()
@@ -63,19 +63,11 @@ def create_table(metadata: Metadata, hasura_actions: list):
         # Execute create table
         cursor.execute(metadata.sql_up)
 
-        # Track on Hasura
-        hasura_actions.append({
-            "type": "pg_track_table",
-            "args": {
-                "source": "default",
-                "schema": "public",
-                "name": metadata.table_name.lower()
-            }
-        })
-
         # Store metadata
         cmd = f"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
         cursor.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
+
+        return True
     elif table_sql[0] != metadata.sql_up:
         # Re-create
         cursor.execute(table_sql[1])  # old sql_down
@@ -85,15 +77,92 @@ def create_table(metadata: Metadata, hasura_actions: list):
         cmd = f"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
         cursor.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
+        return True
+
+    return False
+
+
+# The below functions are used to adhere to Hasura's relationship nomenclature
+# https://hasura.io/docs/latest/schema/postgres/using-existing-database/
+# Possibly use the `inflect` module if they aren't sufficient
+def plural(s: str) -> str:
+    return s if s.endswith("s") else s + "s"
+
+
+def singular(s: str) -> str:
+    return s if not s.endswith("s") else s[:-1]
+
+
+def infer_relationships(table_name: str) -> list[object]:
+    """
+    Use pg_suggest_relationships to infer any relations from foreign keys
+    in the given table. Returns an array containing queries to track each
+    relationship.
+
+    See https://hasura.io/docs/latest/api-reference/metadata-api/relationship/
+    """
+    res = requests.post(
+        "http://graphql-engine:8080/v1/metadata",
+        headers={
+            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
+        },
+        json={
+            "type": "pg_suggest_relationships",
+            "version": 1,
+            "args": {
+                "omit_tracked": True,
+                "tables": [table_name]
+            }
+        }
+    )
+
+    queries = []
+    for rel in res.json()["relationships"]:
+        if rel["type"] == "object":
+            queries.append({
+                "type": "pg_create_object_relationship",
+                "args": {
+                    "source": "default",
+                    "table": rel["from"]["table"]["name"],
+                    "name": singular(rel["to"]["table"]["name"]),
+                    "using": {
+                        "foreign_key_constraint_on": rel["from"]["columns"]
+                    }
+                }
+            })
+        elif rel["type"] == "array":
+            queries.append({
+                "type": "pg_create_array_relationship",
+                "args": {
+                    "source": "default",
+                    "table": rel["from"]["table"]["name"],
+                    "name": plural(rel["to"]["table"]["name"]),
+                    "using": {
+                        "foreign_key_constraint_on": {
+                            "table": rel["to"]["table"]["name"],
+                            "columns": rel["to"]["columns"]
+                        }
+                    }
+                }
+            })
+
+    return queries
+
+
+def send_hasura_api_query(query: object):
+    requests.post(
+        "http://graphql-engine:8080/v1/metadata",
+        headers={
+            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
+        },
+        json=query
+    )
+
 
 @app.post("/insert")
 def insert(metadata: Metadata, payload: list[Any]):
-    # Accumulate Hasura actions such as track table, since they need to be run
-    # after committing the transaction
-    hasura_actions = []
-
     try:
-        create_table(metadata, hasura_actions)
+        created = create_table(metadata)
     except (Exception, Error) as error:
         print("Error while creating PostgreSQL table:", error)
         connection.rollback()
@@ -110,15 +179,23 @@ def insert(metadata: Metadata, payload: list[Any]):
         connection.rollback()
         return {"status": "error", "error": str(error)}
 
-    # Run Hasura actions
-    for action in hasura_actions:
-        requests.post(
-            "http://graphql-engine:8080/v1/metadata",
-            headers={
-                "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
-            },
-            json=action
-        )
+    # Run Hasura actions - must be done after transaction committed
+    if created:
+        # Track table
+        send_hasura_api_query({
+            "type": "pg_track_table",
+            "args": {
+                "source": "default",
+                "schema": "public",
+                "name": metadata.table_name.lower()
+            }
+        })
+
+    # Track relationships
+    send_hasura_api_query({
+        "type": "bulk",
+        "args": infer_relationships(metadata.table_name.lower())
+    })
 
     return {"status": "success"}
 
