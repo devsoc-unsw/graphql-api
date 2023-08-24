@@ -168,16 +168,22 @@ def insert(metadata: Metadata, payload: list[Any]):
         connection.rollback()
         return {"status": "error", "error": str(error)}
 
-    values = [tuple(row[col] for col in metadata.columns) for row in payload]
-    metadata.columns = [f'"{col}"' for col in metadata.columns]
-    cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES ({", ".join(["%s"] * len(metadata.columns))}) ON CONFLICT (id) DO UPDATE SET {", ".join([f"{col}=EXCLUDED.{col}" for col in metadata.columns])}'
     try:
+        # Remove old data
+        cmd = f'TRUNCATE {metadata.table_name} CASCADE'
+        cursor.execute(cmd)
+
+        # Insert new data
+        values = [tuple(row[col] for col in metadata.columns) for row in payload]
+        metadata.columns = [f'"{col}"' for col in metadata.columns]
+        cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES ({", ".join(["%s"] * len(metadata.columns))})'
         cursor.executemany(cmd, values)
-        connection.commit()
     except (Exception, Error) as error:
         print("Error while inserting into PostgreSQL table:", error)
         connection.rollback()
         return {"status": "error", "error": str(error)}
+
+    connection.commit()
 
     # Run Hasura actions - must be done after transaction committed
     if created:
