@@ -82,6 +82,16 @@ def create_table(metadata: Metadata) -> bool:
     return False
 
 
+def send_hasura_api_query(query: object):
+    return requests.post(
+        "http://graphql-engine:8080/v1/metadata",
+        headers={
+            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
+        },
+        json=query
+    )
+
+
 # The below functions are used to adhere to Hasura's relationship nomenclature
 # https://hasura.io/docs/latest/schema/postgres/using-existing-database/
 # Possibly use the `inflect` module if they aren't sufficient
@@ -101,20 +111,14 @@ def infer_relationships(table_name: str) -> list[object]:
 
     See https://hasura.io/docs/latest/api-reference/metadata-api/relationship/
     """
-    res = requests.post(
-        "http://graphql-engine:8080/v1/metadata",
-        headers={
-            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
-        },
-        json={
-            "type": "pg_suggest_relationships",
-            "version": 1,
-            "args": {
-                "omit_tracked": True,
-                "tables": [table_name]
-            }
+    res = send_hasura_api_query({
+        "type": "pg_suggest_relationships",
+        "version": 1,
+        "args": {
+            "omit_tracked": True,
+            "tables": [table_name]
         }
-    )
+    })
 
     queries = []
     for rel in res.json()["relationships"]:
@@ -147,16 +151,6 @@ def infer_relationships(table_name: str) -> list[object]:
             })
 
     return queries
-
-
-def send_hasura_api_query(query: object):
-    requests.post(
-        "http://graphql-engine:8080/v1/metadata",
-        headers={
-            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
-        },
-        json=query
-    )
 
 
 @app.post("/insert")
@@ -197,11 +191,26 @@ def insert(metadata: Metadata, payload: list[Any]):
             }
         })
 
-    # Track relationships
-    send_hasura_api_query({
-        "type": "bulk",
-        "args": infer_relationships(metadata.table_name.lower())
-    })
+        # Allow anonymous access
+        send_hasura_api_query({
+            "type": "pg_create_select_permission",
+            "args": {
+                "source": "default",
+                "table": metadata.table_name.lower(),
+                "role": "anonymous",
+                "permission": {
+                    "columns": "*",
+                    "filter": {},
+                    "allow_aggregations": True
+                }
+            }
+        })
+
+        # Track relationships
+        send_hasura_api_query({
+            "type": "bulk",
+            "args": infer_relationships(metadata.table_name.lower())
+        })
 
     return {"status": "success"}
 
