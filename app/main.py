@@ -10,12 +10,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
 from pydantic import BaseModel
 
-# Ensure HASURA_GRAPHQL_ADMIN_SECRET is set
+# Ensure HASURA_GRAPHQL_ env vars are set
+load_dotenv()
 HGQLA_SECRET = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
-
 if not HGQLA_SECRET:
     print("HASURA_GRAPHQL_ADMIN_SECRET not set")
     exit(1)
+
+HGQL_HOST = os.environ.get('HASURA_GRAPHQL_HOST')
+if not HGQLA_SECRET:
+    print("HASURA_GRAPHQL_HOST not set")
+    exit(1)
+
+HGQL_PORT = os.environ.get('HASURA_GRAPHQL_PORT')
+if not HGQL_PORT:
+    print("HASURA_GRAPHQL_PORT not set")
+    exit(1)
+
 
 class Metadata(BaseModel):
     table_name: str
@@ -23,9 +34,9 @@ class Metadata(BaseModel):
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
 
+
 connection = None
 cursor = None
-load_dotenv()
 try:
     connection = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
                                   password=os.environ.get('POSTGRES_PASSWORD'),
@@ -90,7 +101,7 @@ def create_table(metadata: Metadata) -> bool:
 
 def send_hasura_api_query(query: object):
     return requests.post(
-        "http://graphql-engine:8080/v1/metadata",
+        f"http://${HGQL_HOST}:${HGQL_PORT}/v1/metadata",
         headers={
             "X-Hasura-Admin-Secret": HGQLA_SECRET
         },
