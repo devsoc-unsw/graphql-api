@@ -29,7 +29,7 @@ load_dotenv()
 try:
     connection = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
                                   password=os.environ.get('POSTGRES_PASSWORD'),
-                                  host="postgres",
+                                  host=os.environ.get('POSTGRES_HOST'),
                                   port=os.environ.get('POSTGRES_PORT'),
                                   database=os.environ.get('POSTGRES_DB'))
     cursor = connection.cursor()
