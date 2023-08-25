@@ -35,10 +35,7 @@ Content-Type: application/json
     "metadata": {
         "table_name": "students",
         "columns": ["zId", "name"],
-        "sql_up": "CREATE TABLE Students(
-                       \"zId\"   INT PRIMARY KEY,
-                       \"name\"  TEXT NOT NULL
-                   );",
+        "sql_up": "CREATE TABLE Students(\"zId\" INT PRIMARY KEY, \"name\" TEXT);",
         "sql_down": "DROP TABLE Students CASCADE;"
     },
     "payload": [
