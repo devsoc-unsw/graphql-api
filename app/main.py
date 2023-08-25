@@ -1,21 +1,27 @@
-from typing import Any
-import psycopg2
-from psycopg2 import Error
 import os
+from typing import Any
+
+import psycopg2
+import requests
+import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg2 import Error
 from pydantic import BaseModel
-import uvicorn
-import requests
 
+# Ensure HASURA_GRAPHQL_ADMIN_SECRET is set
+HGQLA_SECRET = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
+
+if not HGQLA_SECRET:
+    print("HASURA_GRAPHQL_ADMIN_SECRET not set")
+    exit(1)
 
 class Metadata(BaseModel):
     table_name: str
     sql_up: str         # SQL to set UP table and related data types/indexes
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
-
 
 connection = None
 cursor = None
@@ -55,7 +61,7 @@ def create_table(metadata: Metadata) -> bool:
 
     Returns whether the table was created or not.
     """
-    cmd = f"SELECT up, down FROM Tables WHERE table_name = %s"
+    cmd = r"SELECT up, down FROM Tables WHERE table_name = %s"
     metadata.table_name = metadata.table_name.lower()
     cursor.execute(cmd, (metadata.table_name,))
     table_sql = cursor.fetchone()
@@ -64,7 +70,7 @@ def create_table(metadata: Metadata) -> bool:
         cursor.execute(metadata.sql_up)
 
         # Store metadata
-        cmd = f"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
+        cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
         cursor.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
 
         return True
@@ -74,7 +80,7 @@ def create_table(metadata: Metadata) -> bool:
         cursor.execute(metadata.sql_up)
 
         # Store new metadata
-        cmd = f"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
+        cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
         cursor.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
         return True
@@ -86,7 +92,7 @@ def send_hasura_api_query(query: object):
     return requests.post(
         "http://graphql-engine:8080/v1/metadata",
         headers={
-            "X-Hasura-Admin-Secret": os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
+            "X-Hasura-Admin-Secret": HGQLA_SECRET
         },
         json=query
     )
