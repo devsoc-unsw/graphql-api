@@ -101,7 +101,7 @@ def create_table(metadata: Metadata) -> bool:
 
 def send_hasura_api_query(query: object):
     return requests.post(
-        f"http://${HGQL_HOST}:${HGQL_PORT}/v1/metadata",
+        f"http://{HGQL_HOST}:{HGQL_PORT}/v1/metadata",
         headers={
             "X-Hasura-Admin-Secret": HGQLA_SECRET
         },
@@ -233,5 +233,5 @@ def insert(metadata: Metadata, payload: list[Any]):
 
 
 if __name__ == '__main__':
-    port = os.environ.get('PORT') or "8000"
+    port = os.environ.get('HASURAGRES_PORT') or "8000"
     uvicorn.run(app, host="0.0.0.0", port=int(port))
