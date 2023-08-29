@@ -18,7 +18,7 @@ if not HGQLA_SECRET:
     exit(1)
 
 HGQL_HOST = os.environ.get('HASURA_GRAPHQL_HOST')
-if not HGQLA_SECRET:
+if not HGQL_HOST:
     print("HASURA_GRAPHQL_HOST not set")
     exit(1)
 
