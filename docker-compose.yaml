@@ -38,13 +38,10 @@ services:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
 
   graphql-engine:
-    image: hasura/graphql-engine:v2.25.0.cli-migrations-v3
+    image: hasura/graphql-engine:v2.33.0
     ports:
       - "${HASURA_GRAPHQL_PORT}:${HASURA_GRAPHQL_PORT}"
     restart: always
-    volumes:
-      - ./migrations:/hasura-migrations
-      # - ./metadata:/hasura-metadata
     networks:
       - hasuragres_network
     environment:

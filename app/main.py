@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
+from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel
 
 # Ensure HASURA_GRAPHQL_ env vars are set
@@ -35,16 +36,18 @@ class Metadata(BaseModel):
     columns: list[str]  # list of column names that require insertion
 
 
-connection = None
-cursor = None
+conn: connection = None
+cur: cursor = None
+
 try:
-    connection = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
+    conn = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
                                   password=os.environ.get('POSTGRES_PASSWORD'),
                                   host=os.environ.get('POSTGRES_HOST'),
                                   port=os.environ.get('POSTGRES_PORT'),
                                   database=os.environ.get('POSTGRES_DB'))
-    cursor = connection.cursor()
-    app = FastAPI(port=os.environ.get('PORT'))
+    cur = conn.cursor()
+
+    app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost", "http://scraper"],
@@ -54,10 +57,10 @@ try:
     )
 except (Exception, Error) as error:
     print("Error while connecting to PostgreSQL", error)
-    if connection:
-        connection.close()
-        if cursor:
-            cursor.close()
+    if conn:
+        conn.close()
+        if cur:
+            cur.close()
         print("PostgreSQL connection is closed")
     exit(1)
 
@@ -72,27 +75,38 @@ def create_table(metadata: Metadata) -> bool:
 
     Returns whether the table was created or not.
     """
+
+    # Initialise Tables table if not already
+    cmd = """
+    CREATE TABLE IF NOT EXISTS Tables (
+        table_name  TEXT PRIMARY KEY,
+        up      	TEXT NOT NULL,
+        down       	TEXT NOT NULL
+    )
+    """
+    cur.execute(cmd)
+
     cmd = r"SELECT up, down FROM Tables WHERE table_name = %s"
     metadata.table_name = metadata.table_name.lower()
-    cursor.execute(cmd, (metadata.table_name,))
-    table_sql = cursor.fetchone()
+    cur.execute(cmd, (metadata.table_name,))
+    table_sql = cur.fetchone()
     if not table_sql:
         # Execute create table
-        cursor.execute(metadata.sql_up)
+        cur.execute(metadata.sql_up)
 
         # Store metadata
         cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
-        cursor.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
+        cur.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
 
         return True
     elif table_sql[0] != metadata.sql_up:
         # Re-create
-        cursor.execute(table_sql[1])  # old sql_down
-        cursor.execute(metadata.sql_up)
+        cur.execute(table_sql[1])  # old sql_down
+        cur.execute(metadata.sql_up)
 
         # Store new metadata
         cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
-        cursor.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
+        cur.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
         return True
 
@@ -176,25 +190,25 @@ def insert(metadata: Metadata, payload: list[Any]):
         created = create_table(metadata)
     except (Exception, Error) as error:
         print("Error while creating PostgreSQL table:", error)
-        connection.rollback()
+        conn.rollback()
         return {"status": "error", "error": str(error)}
 
     try:
         # Remove old data
         cmd = f'TRUNCATE {metadata.table_name} CASCADE'
-        cursor.execute(cmd)
+        cur.execute(cmd)
 
         # Insert new data
         values = [tuple(row[col] for col in metadata.columns) for row in payload]
         metadata.columns = [f'"{col}"' for col in metadata.columns]
         cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES ({", ".join(["%s"] * len(metadata.columns))})'
-        cursor.executemany(cmd, values)
+        cur.executemany(cmd, values)
     except (Exception, Error) as error:
         print("Error while inserting into PostgreSQL table:", error)
-        connection.rollback()
+        conn.rollback()
         return {"status": "error", "error": str(error)}
 
-    connection.commit()
+    conn.commit()
 
     # Run Hasura actions - must be done after transaction committed
     if created:
