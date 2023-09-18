@@ -2,11 +2,9 @@
 
 ## Querying Hasuragres
 
-<!-- TODO: put the correct endpoint in here -->
+To query the data available in Hasuragres, you can send a GraphQL request to `http://graphql.csesoc.app/v1/graphql`.
 
-To query the data available in Hasuragres, you can send a GraphQL request to `http://localhost:8080/v1/graphql`.
-
-You can explore the full GraphQL schema available [here](https://cloud.hasura.io/public/graphiql?endpoint=http://localhost:8080/v1/graphql). For more information on Hasura's GraphQL query schema syntax, see [here](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
+You can explore the full GraphQL schema available [here](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on Hasura's GraphQL query schema syntax, see [here](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
 
 ## Connecting Scrapers
 
