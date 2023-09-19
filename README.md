@@ -1,10 +1,110 @@
-# Hasuragres Service
+# CSESoc's GraphQL API - powered by Hasura & Postgres
 
 ## Querying Hasuragres
 
-To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`.
+To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. You can explore the full GraphQL schema using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
 
-You can explore the full GraphQL schema available [here](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on Hasura's GraphQL query schema syntax, see [here](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
+Here is an example query to fetch all buildings at UNSW with a room that has a capacity greater than 100, along with all of those rooms sorted in descending order of capacity:
+```gql
+query MyQuery {
+  buildings(where: {rooms: {capacity: {_gt: 100}}}) {
+    id
+    name
+    rooms(where: {capacity: {_gt: 100}}, order_by: {capacity: desc}) {
+      id
+      name
+    }
+  }
+}
+```
+
+Here's an example of how we might send this query using TypeScript (using the interactive explorer linked above!):
+```ts
+/*
+This is an example snippet - you should consider tailoring it
+to your service.
+
+Note: we only handle the first operation here
+*/
+
+function fetchGraphQL(
+  operationsDoc: string,
+  operationName: string,
+  variables: Record<string, any>
+) {
+  return fetch('undefined', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: operationsDoc,
+      variables,
+      operationName,
+    }),
+  }).then(result => result.json());
+}
+
+const operation = `
+  {
+    buildings(where: {rooms: {capacity: {_gt: 100}}}) {
+      id
+      name
+      rooms(where: {capacity: {_gt: 100}}, order_by: {capacity: desc}) {
+        id
+        name
+        capacity
+      }
+    }
+  }
+`;
+
+function fetchquery() {
+  return fetchGraphQL(operations, query, {})
+}
+
+fetchquery()
+  .then(({ data, errors }) => {
+    if (errors) {
+      console.error(errors);
+    }
+    console.log(data);
+  })
+  .catch(error => {
+    console.error(error);
+  });
+```
+
+Here is a snippet of what this query might return:
+```json
+{
+  "data": {
+    "buildings": [
+      {
+        "id": "K-G27",
+        "name": "AGSM",
+        "rooms": [
+          {
+            "id": "K-G27-G07",
+            "name": "John B Reid Theatre",
+            "capacity": 131
+          }
+        ]
+      },
+      {
+        "id": "K-J17",
+        "name": "Ainsworth Building",
+        "rooms": [
+          {
+            "id": "K-J17-G03",
+            "name": "Ainsworth G03",
+            "capacity": 350
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+
 
 ## Connecting Scrapers
 
