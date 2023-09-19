@@ -1,18 +1,30 @@
-# CSESoc's GraphQL API - powered by Hasura & Postgres
+# CSESoc GraphQL API - powered by Hasura & Postgres
 
 ## Table of Contents
 
 - [About Hasuragres](#about-hasuragres)
 - [Querying Hasuragres](#querying-hasuragres)
 - [Connecting Scrapers](#connecting-scrapers)
+  - [POST `/insert` Route](#post-insert-route)
+- [Testing Scrapers](#testing-scrapers)
+  - [Troubleshooting](#troubleshooting)
 
 ## About Hasuragres
 
-API for all of CSESoc's scraped data.
+CSESoc provides a GraphQL API for all the data scraped and used for its various projects. In contrast to other unis, UNSW lacks public APIs for much of its data. We hope to fill that gap, so that other students may use this data to power their own personal projects.
+
+This API provides data on:
+- Buildings, rooms and room bookings (as seen in Freerooms)
+- (COMING SOON) Course and class schedules (as seen in Notangles)
+- (COMING SOON) Course information (as seen in Circles and Unilectives)
+
+The API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks in to an existing database and automatically generates and exposes a rich GraphQL API for the data stored within. The underlying database we use is [Postgres](https://www.postgresql.org/), hence the name Hasuragres.
 
 ## Querying Hasuragres
 
 To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. You can explore the full GraphQL schema using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
+
+### Example
 
 Here is an example query to fetch all buildings at UNSW with a room that has a capacity greater than 100, along with all of those rooms sorted in descending order of capacity:
 ```gql
@@ -31,19 +43,13 @@ query MyQuery {
 
 Here's an example of how we might send this query using TypeScript (using the interactive explorer linked above!):
 ```ts
-/*
-This is an example snippet - you should consider tailoring it
-to your service.
-
-Note: we only handle the first operation here
-*/
 
 function fetchGraphQL(
   operationsDoc: string,
   operationName: string,
   variables: Record<string, any>
 ) {
-  return fetch('undefined', {
+  return fetch('https://graphql.csesoc.app/v1/graphql', {
     method: 'POST',
     body: JSON.stringify({
       query: operationsDoc,
@@ -89,17 +95,6 @@ Here is a snippet of what this query might return:
   "data": {
     "buildings": [
       {
-        "id": "K-G27",
-        "name": "AGSM",
-        "rooms": [
-          {
-            "id": "K-G27-G07",
-            "name": "John B Reid Theatre",
-            "capacity": 131
-          }
-        ]
-      },
-      {
         "id": "K-J17",
         "name": "Ainsworth Building",
         "rooms": [
@@ -107,6 +102,32 @@ Here is a snippet of what this query might return:
             "id": "K-J17-G03",
             "name": "Ainsworth G03",
             "capacity": 350
+          }
+        ]
+      },
+      {
+        "id": "K-D23",
+        "name": "Mathews Theatres",
+        "rooms": [
+          {
+            "id": "K-D23-201",
+            "name": "Mathews Theatre A",
+            "capacity": 472
+          },
+          {
+            "id": "K-D23-203",
+            "name": "Mathews Theatre B",
+            "capacity": 246
+          },
+          {
+            "id": "K-D23-303",
+            "name": "Mathews Theatre C",
+            "capacity": 110
+          },
+          {
+            "id": "K-D23-304",
+            "name": "Mathews Theatre D",
+            "capacity": 110
           }
         ]
       }
@@ -124,6 +145,8 @@ Scrapers connecting to Hasuragres should accept two environment variables:
 - `HASURAGRES_PORT`
 
 The scrape job should produce JSON output and send a HTTP POST request to `http://$HASURAGRES_HOST:$HASURAGRES_PORT/insert`.
+
+**Important Note**: If the scraper scrapes multiple entities, and one is the 'parent' of another, make sure to insert the parent first. For example, Freerooms scrapes buildings and rooms - each room belongs to a building, so buildings are inserted first. Otherwise, foreign key constraints will not be satisfied.
 
 
 ### POST `/insert` Route
@@ -167,6 +190,24 @@ Content-Type: application/json
 }
 
 ```
-### Testing Scrapers
+## Testing Scrapers
 
-Clone this repo, `docker compose up -d`, run the scraper with host `localhost` and port `8000`. Go to `http://localhost:8080/console` and enter the admin secret. See if everything is there.
+The recommended way to test whether the scraper is connected correctly is to run Hasuragres locally, attempt to connect to the local instance of Hasuragres and, if that works without errors, manually inspect the Hasura console to check the data appears correct.
+
+To run Hasuragres locally, clone this repo, then in the root directly of the repo, run `docker compose up -d` (you will need Docker Desktop). This will use port 8000 for connecting scrapers, and port 8080 for Hasura. These ports can be configured in the `.env` file.
+
+As described above, your scraper should use the environment variables `HASURAGRES_HOST` and `HASURAGRES_PORT`. Set these to `localhost` and `8000` respectively and run your scraper.
+
+Once that completes, go to `http://localhost:8080/console` and enter the admin secret (`hasurasecret` by default, configured in the `.env` file). If everything is correct, you should see all your tables in the "sidebar" of the API tab. You can also go to the Data tab to inspect the data directly.
+
+### Troubleshooting
+
+Most commonly, missing tables or data will come from a bad request to `/insert` causing the operation to fail. You can take a look at the logs for the `hasuragres` service in Docker Desktop - these should output why the request failed.
+
+Common errors include:
+- **"Error while creating PostgreSQL table"**, which might occur if:
+  - `sql_up` is incorrectly formatted
+  - if updating the table structure, the old `sql_down` did not correctly drop all structures
+- **"Error while inserting into PostgreSQL table"**, which might occur if:
+  - the data is malformed (i.e. columns missing or named inconsistently, constraints not satisfied)
+  - table name does not match the name of the table created in `sql_up`
