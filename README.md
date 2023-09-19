@@ -1,5 +1,15 @@
 # CSESoc's GraphQL API - powered by Hasura & Postgres
 
+## Table of Contents
+
+- [About Hasuragres](#about-hasuragres)
+- [Querying Hasuragres](#querying-hasuragres)
+- [Connecting Scrapers](#connecting-scrapers)
+
+## About Hasuragres
+
+API for all of CSESoc's scraped data.
+
 ## Querying Hasuragres
 
 To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. You can explore the full GraphQL schema using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
@@ -13,6 +23,7 @@ query MyQuery {
     rooms(where: {capacity: {_gt: 100}}, order_by: {capacity: desc}) {
       id
       name
+      capacity
     }
   }
 }
@@ -115,7 +126,7 @@ Scrapers connecting to Hasuragres should accept two environment variables:
 The scrape job should produce JSON output and send a HTTP POST request to `http://$HASURAGRES_HOST:$HASURAGRES_PORT/insert`.
 
 
-### POST /insert
+### POST `/insert` Route
 
 #### Description
 
@@ -156,4 +167,6 @@ Content-Type: application/json
 }
 
 ```
-  
+### Testing Scrapers
+
+Clone this repo, `docker compose up -d`, run the scraper with host `localhost` and port `8000`. Go to `http://localhost:8080/console` and enter the admin secret. See if everything is there.
