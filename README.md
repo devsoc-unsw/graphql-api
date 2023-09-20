@@ -24,15 +24,17 @@ The API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks 
 
 To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. You can explore the full GraphQL schema using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
 
+There should be a large selection of GraphQL libraries for each language, you can explore them [here](https://graphql.org/code) and select the one which best suits your project. As one example, you can see how Freerooms does queries in TypeScript [here](https://github.com/csesoc/freerooms/blob/dev/backend/src/dbInterface.ts).
+
 ### Example
 
-Here is an example query to fetch all buildings at UNSW with a room that has a capacity greater than 100, along with all of those rooms sorted in descending order of capacity:
+Here is an example query to fetch all buildings at UNSW that have a room with capacity greater than some specified value, along with all of those rooms sorted in descending order of capacity:
 ```gql
-query MyQuery {
-  buildings(where: {rooms: {capacity: {_gt: 100}}}) {
+query MyQuery($capacity: Int) {
+  buildings(where: {rooms: {capacity: {_gt: $capacity}}}) {
     id
     name
-    rooms(where: {capacity: {_gt: 100}}, order_by: {capacity: desc}) {
+    rooms(where: {capacity: {_gt: $capacity}}, order_by: {capacity: desc}) {
       id
       name
       capacity
@@ -41,30 +43,25 @@ query MyQuery {
 }
 ```
 
-Here's an example of how we might send this query using TypeScript (using the interactive explorer linked above!):
+Here's an example of how we might send this query using JavaScript (generated using the interactive explorer linked above!):
 ```ts
-
-function fetchGraphQL(
-  operationsDoc: string,
-  operationName: string,
-  variables: Record<string, any>
-) {
-  return fetch('https://graphql.csesoc.app/v1/graphql', {
+async function fetchGraphQL(query, variables) {
+  const result = await fetch('https://graphql.csesoc.app/v1/graphql', {
     method: 'POST',
     body: JSON.stringify({
-      query: operationsDoc,
+      query,
       variables,
-      operationName,
     }),
-  }).then(result => result.json());
+  });
+  return await result.json();
 }
 
-const operation = `
-  {
-    buildings(where: {rooms: {capacity: {_gt: 100}}}) {
+const query = `
+  query MyQuery($capacity: Int) {
+    buildings(where: {rooms: {capacity: {_gt: $capacity}}}) {
       id
       name
-      rooms(where: {capacity: {_gt: 100}}, order_by: {capacity: desc}) {
+      rooms(where: {capacity: {_gt: $capacity}}, order_by: {capacity: desc}) {
         id
         name
         capacity
@@ -73,11 +70,7 @@ const operation = `
   }
 `;
 
-function fetchquery() {
-  return fetchGraphQL(operations, query, {})
-}
-
-fetchquery()
+fetchGraphQL(query, { capacity: 100 })
   .then(({ data, errors }) => {
     if (errors) {
       console.error(errors);
@@ -135,7 +128,6 @@ Here is a snippet of what this query might return:
   }
 }
 ```
-
 
 
 ## Connecting Scrapers
