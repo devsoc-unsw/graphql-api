@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, Literal, Optional
 
 import psycopg2
 import requests
@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
 from psycopg2.extensions import connection, cursor
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Ensure HASURA_GRAPHQL_ env vars are set
 load_dotenv()
@@ -31,13 +31,15 @@ if not HGQL_PORT:
 
 class Metadata(BaseModel):
     table_name: str
+    sql_execute: Optional[str] = Field(None, description='command to execute before running anything else')
     sql_up: str         # SQL to set UP table and related data types/indexes
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
+    write_mode: Optional[Literal['append'] | Literal['truncate']] = Field('truncate', description='mode in which to write to the database')
 
 
-conn: connection = None
-cur: cursor = None
+conn = None
+cur = None
 
 try:
     conn = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
@@ -194,9 +196,13 @@ def insert(metadata: Metadata, payload: list[Any]):
         return {"status": "error", "error": str(error)}
 
     try:
-        # Remove old data
-        cmd = f'TRUNCATE {metadata.table_name} CASCADE'
-        cur.execute(cmd)
+        # execute whatever SQL is required
+        if metadata.sql_execute:
+            cur.execute(metadata.sql_execute)
+        if metadata.write_mode == 'truncate':
+            # Remove old data
+            cmd = f'TRUNCATE {metadata.table_name} CASCADE'
+            cur.execute(cmd)
 
         # Insert new data
         values = [tuple(row[col] for col in metadata.columns) for row in payload]
