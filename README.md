@@ -6,6 +6,7 @@
 - [Querying Hasuragres](#querying-hasuragres)
 - [Connecting Scrapers](#connecting-scrapers)
   - [POST `/insert` Route](#post-insert-route)
+  - [Multiple Scrapers for One Table](#multiple-scrapers-for-one-table)
 - [Testing Scrapers](#testing-scrapers)
   - [Troubleshooting](#troubleshooting)
 
@@ -132,14 +133,15 @@ Here is a snippet of what this query might return:
 
 ## Connecting Scrapers
 
+Hasuragres has been designed with a "plug-and-play" functionality in mind for connecting scrapers. The logic of the scraper should not need to change, as long as it can produce JSON output and send this over HTTP.
+
 Scrapers connecting to Hasuragres should accept two environment variables:
 - `HASURAGRES_HOST`
 - `HASURAGRES_PORT`
 
-The scrape job should produce JSON output and send a HTTP POST request to `http://$HASURAGRES_HOST:$HASURAGRES_PORT/insert`.
+The scrape job should produce JSON output and send a HTTP POST request to `http://$HASURAGRES_HOST:$HASURAGRES_PORT/insert`. See below for a description.
 
-**Important Note**: If the scraper scrapes multiple entities, and one is the 'parent' of another, make sure to insert the parent first. For example, Freerooms scrapes buildings and rooms - each room belongs to a building, so buildings are inserted first. Otherwise, foreign key constraints will not be satisfied.
-
+**Important Note**: If the scraper scrapes multiple entities, and one references another, make sure to insert the referenced table first. For example, Freerooms scrapes buildings and rooms - each room belongs to a building, so buildings are inserted first. Otherwise, foreign key constraints will not be satisfied.
 
 ### POST `/insert` Route
 
@@ -153,14 +155,16 @@ When a table is created, it is automatically tracked in Hasura and added to the 
 
 #### Parameters
 
-| name                  | type         | description                                                                                                                                                                                                   |
-|-----------------------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `metadata`            | object       | Instructions for creating/inserting into PostgreSQL tables.                                                                                                                                                   |
-| `metadata.table_name` | str          | Name of table to create/insert into.<br/><br/>Must match name of table created in `metadata.sql_up` (case insensitive).                                                                                       |
-| `metadata.columns`    | list[str]    | List of column names that require insertion.<br/><br/>Must match column names in table created in `metadata.sql_up`, as well as the keys of each object in `payload` (case sensitive).                        |
-| `metadata.sql_up`     | str          | SQL script used to set UP (create) a table to store the scraped data, as well as any related data types.                                                                                                      |
-| `metadata.sql_down`   | str          | SQL script to tear DOWN (drop) all objects created by `metadata.sql_up`.<br/><br/>Should use the CASCADE option when dropping, otherwise the script may fail unexpectedly when other tables rely on this one. |
-| `payload`             | list[object] | List of objects to insert into the database.<br/><br/>Ideally, this is simply the JSON output of the scraper.                                                                                                 |
+| name                   | type         | required | description                                                                                                                                                                                                     |
+|------------------------|--------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `metadata`             | object       | Yes      | Instructions for creating/inserting into PostgreSQL tables.                                                                                                                                                     |
+| `metadata.table_name`  | str          | Yes      | Name of table to create/insert into.<br/><br/>Must match name of table created in `metadata.sql_up` (case insensitive).                                                                                         |
+| `metadata.columns`     | list[str]    | Yes      | List of column names that require insertion.<br/><br/>Must match column names in table created in `metadata.sql_up`, as well as the keys of each object in `payload` (case sensitive).                          |
+| `metadata.write_mode`  | str          | No       | One of `"truncate"`, meaning all rows in the table should be deleted before insertion, or `"append"`, meaning add to the existing data.<br/><br/>Defaults to `truncate`.                                        |
+| `metadata.sql_execute` | str          | No       | SQL commands to run *before* each insertion.                                                                                                                                                                    |
+| `metadata.sql_up`      | str          | Yes      | SQL commands used to set UP (create) a table to store the scraped data, as well as any related data types.                                                                                                      |
+| `metadata.sql_down`    | str          | Yes      | SQL commands to tear DOWN (drop) all objects created by `metadata.sql_up`.<br/><br/>Should use the CASCADE option when dropping, otherwise the script may fail unexpectedly when other tables rely on this one. |
+| `payload`              | list[object] | Yes      | List of objects to insert into the database.<br/><br/>Ideally, this is simply the JSON output of the scraper.                                                                                                   |
 
 #### Example Request
 
@@ -182,6 +186,17 @@ Content-Type: application/json
 }
 
 ```
+
+### Multiple Scrapers for One Table
+
+If you want to connect multiple scrapers to the same table, for example if you have multiple data sources, then Hasuragres is able to support this. Follow the guidelines below to set this up.
+
+Both scrapers should maintain an up-to-date copy of the `sql_up` and `sql_down` commands sent to Hasuragres. Furthermore, if you need to update these commands, please be sure to update all scrapers around the same time without much delay between each. If at any point the scrapers have different versions of the SQL, then any inserts will simply drop the table and all data from the other scraper(s).
+
+It is also important that you make use of the `sql_execute` and `write_mode` fields of the insert metadata. By default, inserts are set to truncate the table they insert to, which would only allow data from one scraper at any one time. For multiple scrapers, they should each be in `"append"` mode so that scrapers can add on to the data from other scrapers.
+
+Also, `sql_execute` should contain commands(s) to remove only those rows that were previously inserted by the scraper - it may be useful to add some field to the schema that identifies the source of each row if there is no easy way to distinguish between the data sources.
+
 ## Testing Scrapers
 
 The recommended way to test whether the scraper is connected correctly is to run Hasuragres locally, attempt to connect to the local instance of Hasuragres and, if that works without errors, manually inspect the Hasura console to check the data appears correct.
@@ -190,7 +205,7 @@ To run Hasuragres locally, clone this repo, then in the root directly of the rep
 
 As described above, your scraper should use the environment variables `HASURAGRES_HOST` and `HASURAGRES_PORT`. Set these to `localhost` and `8000` respectively and run your scraper.
 
-Once that completes, go to `http://localhost:8080/console` and enter the admin secret (`hasurasecret` by default, configured in the `.env` file). If everything is correct, you should see all your tables in the "sidebar" of the API tab. You can also go to the Data tab to inspect the data directly.
+Once that completes, go to `http://localhost:8080/console` and enter the admin secret (`hasurasecret` by default, configured in the `.env` file). If everything is correct, you should see all your tables in the "sidebar" of the API tab, and you can try out some queries. You can also go to the Data tab to inspect the data directly.
 
 ### Troubleshooting
 

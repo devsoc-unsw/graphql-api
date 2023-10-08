@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
+from psycopg2.extras import execute_values
 from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel, Field
 
@@ -207,8 +208,8 @@ def insert(metadata: Metadata, payload: list[Any]):
         # Insert new data
         values = [tuple(row[col] for col in metadata.columns) for row in payload]
         metadata.columns = [f'"{col}"' for col in metadata.columns]
-        cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES ({", ".join(["%s"] * len(metadata.columns))})'
-        cur.executemany(cmd, values)
+        cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES %s'
+        execute_values(cur, cmd, values)
     except (Exception, Error) as error:
         print("Error while inserting into PostgreSQL table:", error)
         conn.rollback()
