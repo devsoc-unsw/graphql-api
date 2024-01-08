@@ -5,7 +5,7 @@ import psycopg2
 import requests
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
 from psycopg2.extras import execute_values
@@ -36,7 +36,7 @@ class Metadata(BaseModel):
     sql_up: str         # SQL to set UP table and related data types/indexes
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
-    write_mode: Optional[Literal['append'] | Literal['truncate']] = Field('truncate', description='mode in which to write to the database')
+    write_mode: Optional[Literal['append', 'truncate']] = Field('truncate', description='mode in which to write to the database')
 
 
 conn = None
@@ -80,14 +80,7 @@ def create_table(metadata: Metadata) -> bool:
     """
 
     # Initialise Tables table if not already
-    cmd = """
-    CREATE TABLE IF NOT EXISTS Tables (
-        table_name  TEXT PRIMARY KEY,
-        up      	TEXT NOT NULL,
-        down       	TEXT NOT NULL
-    )
-    """
-    cur.execute(cmd)
+    cur.execute(open("app/init.sql", "r").read())
 
     cmd = r"SELECT up, down FROM Tables WHERE table_name = %s"
     metadata.table_name = metadata.table_name.lower()
@@ -116,7 +109,7 @@ def create_table(metadata: Metadata) -> bool:
     return False
 
 
-def send_hasura_api_query(query: object):
+def send_hasura_api_query(query: dict):
     return requests.post(
         f"http://{HGQL_HOST}:{HGQL_PORT}/v1/metadata",
         headers={
@@ -192,9 +185,10 @@ def insert(metadata: Metadata, payload: list[Any]):
     try:
         created = create_table(metadata)
     except (Exception, Error) as error:
-        print("Error while creating PostgreSQL table:", error)
+        err_msg = "Error while creating PostgreSQL table: " + str(error)
+        print(err_msg)
         conn.rollback()
-        return {"status": "error", "error": str(error)}
+        raise HTTPException(status_code=400, detail=err_msg)
 
     try:
         # execute whatever SQL is required
@@ -211,9 +205,10 @@ def insert(metadata: Metadata, payload: list[Any]):
         cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES %s'
         execute_values(cur, cmd, values)
     except (Exception, Error) as error:
-        print("Error while inserting into PostgreSQL table:", error)
+        err_msg = "Error while inserting into PostgreSQL table: " + str(error)
+        print(err_msg)
         conn.rollback()
-        return {"status": "error", "error": str(error)}
+        raise HTTPException(status_code=400, detail=err_msg)
 
     conn.commit()
 
@@ -250,7 +245,7 @@ def insert(metadata: Metadata, payload: list[Any]):
             "args": infer_relationships(metadata.table_name.lower())
         })
 
-    return {"status": "success"}
+    return {}
 
 
 if __name__ == '__main__':
