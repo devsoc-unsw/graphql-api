@@ -29,8 +29,8 @@ jobs:
           platforms: linux/amd64
           file: Dockerfile
           tags: |
-            ghcr.io/csesoc/hasuragres:${{ github.sha }}
-            ghcr.io/csesoc/hasuragres:latest
+            ghcr.io/devsoc-unsw/hasuragres:${{ github.sha }}
+            ghcr.io/devsoc-unsw/hasuragres:latest
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
