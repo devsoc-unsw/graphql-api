@@ -1,8 +1,9 @@
-# CSESoc GraphQL API - powered by Hasura & Postgres
+# DevSoc GraphQL API - powered by Hasura & Postgres
 
 ## Table of Contents
 
 - [About Hasuragres](#about-hasuragres)
+- [Interactive Explorer](#interactive-explorer)
 - [Querying Hasuragres](#querying-hasuragres)
 - [Connecting Scrapers](#connecting-scrapers)
   - [POST `/insert` Route](#post-insert-route)
@@ -12,20 +13,29 @@
 
 ## About Hasuragres
 
-CSESoc provides a GraphQL API for all the data scraped and used for its various projects. In contrast to other unis, UNSW lacks public APIs for much of its data. We hope to fill that gap, so that other students may use this data to power their own personal projects.
+DevSoc provides a GraphQL API for all the data scraped and used for its various projects. In contrast to other unis, UNSW lacks public APIs for much of its data. We hope to fill that gap, so that other students may use this data to power their own personal projects.
 
 This API provides data on:
 - Buildings, rooms and room bookings (as seen in Freerooms)
-- (COMING SOON) Course and class schedules (as seen in Notangles)
-- (COMING SOON) Course information (as seen in Circles and Unilectives)
+- **[COMING SOON]** Course and class schedules (as seen in Notangles)
+- **[COMING SOON]** Course information (as seen in Circles and Unilectives)
 
-The API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks in to an existing database and automatically generates and exposes a rich GraphQL API for the data stored within. The underlying database we use is [Postgres](https://www.postgresql.org/), hence the name Hasuragres.
+The API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks in to an existing database and automatically generates and exposes a rich GraphQL API for the data stored within. The underlying database we use is [Postgres](https://www.postgresql.org/), hence the name **Hasuragres**.
+
+## Interactive Explorer
+![Interactive explorer](docs/explorer.png)
+
+You can explore Hasuragres using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). In this explorer, you can:
+- See the full GraphQL schema
+- Experiment with building your own queries
+- Execute queries on the data
+- Generate code to execute queries programmatically
 
 ## Querying Hasuragres
 
-To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. You can explore the full GraphQL schema using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
+To query the data available in Hasuragres, you can send a GraphQL request to `https://graphql.csesoc.app/v1/graphql`. For more information on the different kind of queries you can make with the Hasura GraphQL API, see [the docs](https://hasura.io/docs/latest/queries/postgres/index/#exploring-queries).
 
-There should be a large selection of GraphQL libraries for each language, you can explore them [here](https://graphql.org/code) and select the one which best suits your project. As one example, you can see how Freerooms does queries in TypeScript [here](https://github.com/csesoc/freerooms/blob/dev/backend/src/dbInterface.ts).
+There should be a large selection of GraphQL libraries for each language, you can explore them [here](https://graphql.org/code) and select the one which best suits your project. As one example, you can see how Freerooms does queries in TypeScript [here](https://github.com/devsoc-unsw/freerooms/blob/dev/backend/src/dbInterface.ts).
 
 ### Example
 
@@ -132,6 +142,8 @@ Here is a snippet of what this query might return:
 
 
 ## Connecting Scrapers
+
+**Note: The following section contains instructions for DevSoc internal teams**
 
 Hasuragres has been designed with a "plug-and-play" functionality in mind for connecting scrapers. The logic of the scraper should not need to change, as long as it can produce JSON output and send this over HTTP.
 
