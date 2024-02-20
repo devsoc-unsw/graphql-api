@@ -6,11 +6,10 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
-from psycopg2.extras import execute_values
 from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel, Field
 
-from app.helpers.hasura import track_table
+from helpers.hasura import track_table
 
 
 class Metadata(BaseModel):
@@ -117,13 +116,14 @@ def execute_upsert(metadata: Metadata, payload: list[Any]):
     non_key_columns = [col for col in columns if col not in key_columns]
 
     cmd = f"""
-        INSERT INTO {metadata.table_name}({", ".join(columns)}) VALUES %s
+        INSERT INTO {metadata.table_name}({", ".join(columns)})
+        VALUES ({", ".join(["%s"] * len(columns))})
         ON CONFLICT ({", ".join(key_columns)})
         DO UPDATE SET {", ".join(f"{col} = EXCLUDED.{col}" for col in non_key_columns)};
     """
     values = [tuple(row[col] for col in metadata.columns) for row in payload]
 
-    execute_values(cur, cmd, values)
+    cur.executemany(cmd, values)
 
 
 def execute_delete(metadata: Metadata, payload: list[Any]):
@@ -134,9 +134,9 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
         DELETE FROM {metadata.table_name}
         WHERE ({", ".join(quoted_key_columns)}) NOT IN %s;
     """
-    values = [tuple(row[col] for col in key_columns) for row in payload]
+    values = tuple(tuple(row[col] for col in key_columns) for row in payload)
 
-    cur.execute(cmd, values)
+    cur.execute(cmd, (values,))
 
 
 @app.post("/insert")
