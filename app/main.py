@@ -15,7 +15,8 @@ from app.helpers.hasura import track_table
 
 class Metadata(BaseModel):
     table_name: str
-    sql_execute: Optional[str] = Field(None, description='command to execute before running anything else')
+    sql_before: Optional[str] = Field(None, description='command to execute before running the insert')
+    sql_after: Optional[str] = Field(None, description='command to execute after running the insert')
     sql_up: str         # SQL to set UP table and related data types/indexes
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
@@ -149,16 +150,16 @@ def insert(metadata: Metadata, payload: list[Any]):
         raise HTTPException(status_code=400, detail=err_msg)
 
     try:
-        # Execute whatever SQL is required
-        if metadata.sql_execute:
-            cur.execute(metadata.sql_execute)
+        if metadata.sql_before:
+            cur.execute(metadata.sql_before)
 
         execute_upsert(metadata, payload)
-
         if metadata.write_mode == 'overwrite':
             # Delete rows not in payload
             execute_delete(metadata, payload)
 
+        if metadata.sql_after:
+            cur.execute(metadata.sql_after)
     except (Exception, Error) as error:
         err_msg = "Error while inserting into PostgreSQL table: " + str(error)
         print(err_msg)
