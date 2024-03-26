@@ -3,12 +3,13 @@ from typing import Any, Literal, Optional
 
 import psycopg2
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
 from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel, Field
 
+from helpers.auth import validate_api_key
 from helpers.hasura import track_table
 
 
@@ -20,6 +21,7 @@ class Metadata(BaseModel):
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
     write_mode: Literal['append', 'overwrite'] = Field('overwrite', description='mode in which to write to the database')
+    dryrun: bool = Field(False, description='if true, does not commit changes - useful for testing')
 
 
 conn: connection = None
@@ -139,7 +141,7 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
     cur.execute(cmd, (values,))
 
 
-@app.post("/insert")
+@app.post("/insert", dependencies=[Depends(validate_api_key)])
 def insert(metadata: Metadata, payload: list[Any]):
     try:
         created = create_table(metadata)
@@ -166,11 +168,14 @@ def insert(metadata: Metadata, payload: list[Any]):
         conn.rollback()
         raise HTTPException(status_code=400, detail=err_msg)
 
-    conn.commit()
+    if not metadata.dryrun:
+        conn.commit()
 
-    # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
-    if created:
-        track_table(metadata.table_name.lower())
+        # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
+        if created:
+            track_table(metadata.table_name.lower())
+    else:
+        conn.rollback()
 
     return {}
 

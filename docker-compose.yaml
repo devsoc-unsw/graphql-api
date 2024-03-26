@@ -17,6 +17,7 @@ services:
       HASURA_GRAPHQL_HOST: ${HASURA_GRAPHQL_HOST}
       HASURA_GRAPHQL_PORT: ${HASURA_GRAPHQL_PORT}
       HASURAGRES_PORT: ${HASURAGRES_PORT}
+      API_KEYS: ${API_KEYS}
     depends_on:
       - graphql-engine
       - postgres
