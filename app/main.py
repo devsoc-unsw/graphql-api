@@ -2,52 +2,35 @@ import os
 from typing import Any, Literal, Optional
 
 import psycopg2
-import requests
 import uvicorn
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import Error
-from psycopg2.extras import execute_values
 from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel, Field
 
-# Ensure HASURA_GRAPHQL_ env vars are set
-load_dotenv()
-HGQLA_SECRET = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET")
-if not HGQLA_SECRET:
-    print("HASURA_GRAPHQL_ADMIN_SECRET not set")
-    exit(1)
-
-HGQL_HOST = os.environ.get('HASURA_GRAPHQL_HOST')
-if not HGQL_HOST:
-    print("HASURA_GRAPHQL_HOST not set")
-    exit(1)
-
-HGQL_PORT = os.environ.get('HASURA_GRAPHQL_PORT')
-if not HGQL_PORT:
-    print("HASURA_GRAPHQL_PORT not set")
-    exit(1)
+from helpers.hasura import track_table
 
 
 class Metadata(BaseModel):
     table_name: str
-    sql_execute: Optional[str] = Field(None, description='command to execute before running anything else')
+    sql_before: Optional[str] = Field(None, description='command to execute before running the insert')
+    sql_after: Optional[str] = Field(None, description='command to execute after running the insert')
     sql_up: str         # SQL to set UP table and related data types/indexes
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
-    write_mode: Optional[Literal['append', 'truncate']] = Field('truncate', description='mode in which to write to the database')
+    write_mode: Literal['append', 'overwrite'] = Field('overwrite', description='mode in which to write to the database')
 
 
-conn = None
-cur = None
+conn: connection = None
+cur: cursor = None
 
 try:
     conn = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
-                                  password=os.environ.get('POSTGRES_PASSWORD'),
-                                  host=os.environ.get('POSTGRES_HOST'),
-                                  port=os.environ.get('POSTGRES_PORT'),
-                                  database=os.environ.get('POSTGRES_DB'))
+                            password=os.environ.get('POSTGRES_PASSWORD'),
+                            host=os.environ.get('POSTGRES_HOST'),
+                            port=os.environ.get('POSTGRES_PORT'),
+                            database=os.environ.get('POSTGRES_DB'))
     cur = conn.cursor()
 
     app = FastAPI()
@@ -109,75 +92,51 @@ def create_table(metadata: Metadata) -> bool:
     return False
 
 
-def send_hasura_api_query(query: dict):
-    return requests.post(
-        f"http://{HGQL_HOST}:{HGQL_PORT}/v1/metadata",
-        headers={
-            "X-Hasura-Admin-Secret": HGQLA_SECRET
-        },
-        json=query
-    )
-
-
-# The below functions are used to adhere to Hasura's relationship nomenclature
-# https://hasura.io/docs/latest/schema/postgres/using-existing-database/
-# Possibly use the `inflect` module if they aren't sufficient
-def plural(s: str) -> str:
-    return s if s.endswith("s") else s + "s"
-
-
-def singular(s: str) -> str:
-    return s if not s.endswith("s") else s[:-1]
-
-
-def infer_relationships(table_name: str) -> list[object]:
+def get_primary_key_columns(table_name: str) -> list[str]:
+    cmd = f"""
+        SELECT c.column_name
+        FROM information_schema.columns c
+            JOIN information_schema.key_column_usage kcu
+                ON c.table_name = kcu.table_name
+                AND c.column_name = kcu.column_name
+            JOIN information_schema.table_constraints tc
+                ON kcu.table_name = tc.table_name
+                AND kcu.constraint_name = tc.constraint_name
+        WHERE c.table_name = '{table_name}'
+            AND tc.constraint_type = 'PRIMARY KEY';
     """
-    Use pg_suggest_relationships to infer any relations from foreign keys
-    in the given table. Returns an array containing queries to track each
-    relationship.
+    cur.execute(cmd)
 
-    See https://hasura.io/docs/latest/api-reference/metadata-api/relationship/
+    return [row[0] for row in cur.fetchall()]
+
+
+def execute_upsert(metadata: Metadata, payload: list[Any]):
+    columns = [f'"{col}"' for col in metadata.columns]
+    key_columns = [f'"{col}"' for col in get_primary_key_columns(metadata.table_name)]
+    non_key_columns = [col for col in columns if col not in key_columns]
+
+    cmd = f"""
+        INSERT INTO {metadata.table_name}({", ".join(columns)})
+        VALUES ({", ".join(["%s"] * len(columns))})
+        ON CONFLICT ({", ".join(key_columns)})
+        DO UPDATE SET {", ".join(f"{col} = EXCLUDED.{col}" for col in non_key_columns)};
     """
-    res = send_hasura_api_query({
-        "type": "pg_suggest_relationships",
-        "version": 1,
-        "args": {
-            "omit_tracked": True,
-            "tables": [table_name]
-        }
-    })
+    values = [tuple(row[col] for col in metadata.columns) for row in payload]
 
-    queries = []
-    for rel in res.json()["relationships"]:
-        if rel["type"] == "object":
-            queries.append({
-                "type": "pg_create_object_relationship",
-                "args": {
-                    "source": "default",
-                    "table": rel["from"]["table"]["name"],
-                    "name": singular(rel["to"]["table"]["name"]),
-                    "using": {
-                        "foreign_key_constraint_on": rel["from"]["columns"]
-                    }
-                }
-            })
-        elif rel["type"] == "array":
-            queries.append({
-                "type": "pg_create_array_relationship",
-                "args": {
-                    "source": "default",
-                    "table": rel["from"]["table"]["name"],
-                    "name": plural(rel["to"]["table"]["name"]),
-                    "using": {
-                        "foreign_key_constraint_on": {
-                            "table": rel["to"]["table"]["name"],
-                            "columns": rel["to"]["columns"]
-                        }
-                    }
-                }
-            })
+    cur.executemany(cmd, values)
 
-    return queries
+
+def execute_delete(metadata: Metadata, payload: list[Any]):
+    key_columns = get_primary_key_columns(metadata.table_name)
+    quoted_key_columns = [f'"{col}"' for col in key_columns]
+
+    cmd = f"""
+        DELETE FROM {metadata.table_name}
+        WHERE ({", ".join(quoted_key_columns)}) NOT IN %s;
+    """
+    values = tuple(tuple(row[col] for col in key_columns) for row in payload)
+
+    cur.execute(cmd, (values,))
 
 
 @app.post("/insert")
@@ -191,19 +150,16 @@ def insert(metadata: Metadata, payload: list[Any]):
         raise HTTPException(status_code=400, detail=err_msg)
 
     try:
-        # execute whatever SQL is required
-        if metadata.sql_execute:
-            cur.execute(metadata.sql_execute)
-        if metadata.write_mode == 'truncate':
-            # Remove old data
-            cmd = f'TRUNCATE {metadata.table_name} CASCADE'
-            cur.execute(cmd)
+        if metadata.sql_before:
+            cur.execute(metadata.sql_before)
 
-        # Insert new data
-        values = [tuple(row[col] for col in metadata.columns) for row in payload]
-        metadata.columns = [f'"{col}"' for col in metadata.columns]
-        cmd = f'INSERT INTO {metadata.table_name}({", ".join(metadata.columns)}) VALUES %s'
-        execute_values(cur, cmd, values)
+        execute_upsert(metadata, payload)
+        if metadata.write_mode == 'overwrite':
+            # Delete rows not in payload
+            execute_delete(metadata, payload)
+
+        if metadata.sql_after:
+            cur.execute(metadata.sql_after)
     except (Exception, Error) as error:
         err_msg = "Error while inserting into PostgreSQL table: " + str(error)
         print(err_msg)
@@ -212,38 +168,9 @@ def insert(metadata: Metadata, payload: list[Any]):
 
     conn.commit()
 
-    # Run Hasura actions - must be done after transaction committed
+    # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
     if created:
-        # Track table
-        send_hasura_api_query({
-            "type": "pg_track_table",
-            "args": {
-                "source": "default",
-                "schema": "public",
-                "name": metadata.table_name.lower()
-            }
-        })
-
-        # Allow anonymous access
-        send_hasura_api_query({
-            "type": "pg_create_select_permission",
-            "args": {
-                "source": "default",
-                "table": metadata.table_name.lower(),
-                "role": "anonymous",
-                "permission": {
-                    "columns": "*",
-                    "filter": {},
-                    "allow_aggregations": True
-                }
-            }
-        })
-
-        # Track relationships
-        send_hasura_api_query({
-            "type": "bulk",
-            "args": infer_relationships(metadata.table_name.lower())
-        })
+        track_table(metadata.table_name.lower())
 
     return {}
 

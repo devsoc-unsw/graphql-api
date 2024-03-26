@@ -161,22 +161,26 @@ The scrape job should produce JSON output and send a HTTP POST request to `http:
 
 Inserts data into the PostgreSQL table specified by `table_name`. If such a table does not yet exist, it is created as specified in `sql_up`.
 
+Insertion into Hasuragres uses 'upsertion' logic. This means that when inserting rows, if there is already an existing row with the same primary key, we update that row rather than raising an error. This approach is also used if `write_mode` is set to `"overwrite"` so that rows still present after overwriting don't get deleted and cascade down to any dependent tables.
+
 Hasuragres keeps track of the SQL scripts used to create each table. If there is an inconsistency between the stored `sql_up` script and the one provided in the request, then the table is re-created using the new `sql_up`. The stored `sql_down` is used to drop the old table - it's important that `sql_down` is correct, otherwise updates to the table structure may fail.
 
 When a table is created, it is automatically tracked in Hasura and added to the GraphQL Schema. Corresponding query fields are created called `<table_name>` and `<table_name>_by_pk` (note that `table_name` will be in lowercase), with fields for each column of the table. Furthermore, any foreign key relationships are inferred, and fields containing nested objects are added to each relevant queryable data type. More information can be found [here](https://hasura.io/docs/latest/getting-started/how-it-works/index/).
 
 #### Parameters
 
-| name                   | type         | required | description                                                                                                                                                                                                     |
-|------------------------|--------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `metadata`             | object       | Yes      | Instructions for creating/inserting into PostgreSQL tables.                                                                                                                                                     |
-| `metadata.table_name`  | str          | Yes      | Name of table to create/insert into.<br/><br/>Must match name of table created in `metadata.sql_up` (case insensitive).                                                                                         |
-| `metadata.columns`     | list[str]    | Yes      | List of column names that require insertion.<br/><br/>Must match column names in table created in `metadata.sql_up`, as well as the keys of each object in `payload` (case sensitive).                          |
-| `metadata.write_mode`  | str          | No       | One of `"truncate"`, meaning all rows in the table should be deleted before insertion, or `"append"`, meaning add to the existing data.<br/><br/>Defaults to `truncate`.                                        |
-| `metadata.sql_execute` | str          | No       | SQL commands to run *before* each insertion.                                                                                                                                                                    |
-| `metadata.sql_up`      | str          | Yes      | SQL commands used to set UP (create) a table to store the scraped data, as well as any related data types.                                                                                                      |
-| `metadata.sql_down`    | str          | Yes      | SQL commands to tear DOWN (drop) all objects created by `metadata.sql_up`.<br/><br/>Should use the CASCADE option when dropping, otherwise the script may fail unexpectedly when other tables rely on this one. |
-| `payload`              | list[object] | Yes      | List of objects to insert into the database.<br/><br/>Ideally, this is simply the JSON output of the scraper.                                                                                                   |
+| name                  | type         | required | description                                                                                                                                                                                                     |
+|-----------------------|--------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `metadata`            | object       | Yes      | Instructions for creating/inserting into PostgreSQL tables.                                                                                                                                                     |
+| `metadata.table_name` | str          | Yes      | Name of table to create/insert into.<br/><br/>Must match name of table created in `metadata.sql_up` (case insensitive).                                                                                         |
+| `metadata.columns`    | list[str]    | Yes      | List of column names that require insertion.<br/><br/>Must match column names in table created in `metadata.sql_up`, as well as the keys of each object in `payload` (case sensitive).                          |
+| `metadata.write_mode` | str          | No       | One of `"overwrite"` or `"append"`.<br/><br/>Defaults to `"overwrite"`.                                                                                                                                         |
+| `metadata.sql_before` | str          | No       | SQL command to run *before* the insertion.                                                                                                                                                                      |
+| `metadata.sql_after`  | str          | No       | SQL command to run *after* the insertion.                                                                                                                                                                       |
+| `metadata.sql_up`     | str          | Yes      | SQL commands used to set UP (create) a table to store the scraped data, as well as any related data types.                                                                                                      |
+| `metadata.sql_down`   | str          | Yes      | SQL commands to tear DOWN (drop) all objects created by `metadata.sql_up`.<br/><br/>Should use the CASCADE option when dropping, otherwise the script may fail unexpectedly when other tables rely on this one. |
+| `payload`             | list[object] | Yes      | List of objects to insert into the database.<br/><br/>Ideally, this is simply the JSON output of the scraper.                                                                                                   |
+
 
 #### Example Request
 
@@ -205,9 +209,9 @@ If you want to connect multiple scrapers to the same table, for example if you h
 
 Both scrapers should maintain an up-to-date copy of the `sql_up` and `sql_down` commands sent to Hasuragres. Furthermore, if you need to update these commands, please be sure to update all scrapers around the same time without much delay between each. If at any point the scrapers have different versions of the SQL, then any inserts will simply drop the table and all data from the other scraper(s).
 
-It is also important that you make use of the `sql_execute` and `write_mode` fields of the insert metadata. By default, inserts are set to truncate the table they insert to, which would only allow data from one scraper at any one time. For multiple scrapers, they should each be in `"append"` mode so that scrapers can add on to the data from other scrapers.
+It is also important that you make use of the `sql_before` and `write_mode` fields of the insert metadata. By default, inserts are set to truncate the table they insert to, which would only allow data from one scraper at any one time. For multiple scrapers, they should each be in `"append"` mode so that scrapers can add on to the data from other scrapers.
 
-Also, `sql_execute` should contain commands(s) to remove only those rows that were previously inserted by the scraper - it may be useful to add some field to the schema that identifies the source of each row if there is no easy way to distinguish between the data sources.
+Also, `sql_before` should contain commands(s) to remove only those rows that were previously inserted by the scraper - it may be useful to add some field to the schema that identifies the source of each row if there is no easy way to distinguish between the data sources.
 
 ## Testing Scrapers
 
