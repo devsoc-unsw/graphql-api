@@ -1,6 +1,8 @@
 name: Docker
 on:
   push:
+    branches:
+      - "master"
 
 jobs:
   build:
@@ -34,3 +36,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+  deploy:
+    name: Deploy (CD)
+    runs-on: ubuntu-latest
+    needs: [ build ]
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          repository: csesoc/deployment
+          ref: migration
+          token: ${{ secrets.GH_TOKEN }}
+      - name: Install yq
+        uses: mikefarah/yq@v4.40.5
+      - name: Update deployment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git config user.name "CSESoc CD"
+          git config user.email "technical@csesoc.org.au"
+
+          git checkout -b update/hasuragres/${{ github.sha }}
+          yq -i '.items[0].spec.template.spec.containers[0].image = "ghcr.io/devsoc-unsw/hasuragres:${{ github.sha }}"' projects/hasuragres/hasuragres.yml
+
+          git add . 
+          git commit -m "feat(hasuragres): update image" 
+          git push -u origin update/hasuragres/${{ github.sha }}
+          gh pr create -B migration --title "feat(hasuragres): update image" --body "Updates the image for the hasuragres deployment to commit devsoc-unsw/hasuragres@${{ github.sha }}." > URL
+          gh pr merge $(cat URL) --squash -d
