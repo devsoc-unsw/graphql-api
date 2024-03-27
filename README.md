@@ -2,17 +2,6 @@
 
 This page explains the purpose of the DevSoc GraphQL API and how to use it as a client. For DevSoc teams looking to connect a new scraper to Hasuragres please see [here](scrapers.md).
 
-## Table of Contents
-
-- [About Hasuragres](#about-hasuragres)
-- [Interactive Explorer](#interactive-explorer)
-- [Querying Hasuragres](#querying-hasuragres)
-- [Connecting Scrapers](#connecting-scrapers)
-  - [POST `/insert` Route](#post-insert-route)
-  - [Multiple Scrapers for One Table](#multiple-scrapers-for-one-table)
-- [Testing Scrapers](#testing-scrapers)
-  - [Troubleshooting](#troubleshooting)
-
 ## About Hasuragres
 
 DevSoc provides a GraphQL API for all the data scraped and used for its various projects. In contrast to other unis, UNSW lacks public APIs for much of its data. We hope to fill that gap, so that other students may use this data to power their own personal projects.
