@@ -18,13 +18,13 @@ The scrape job should produce JSON output and send a HTTP POST request to `$HASU
 
 Inserts data into the PostgreSQL table specified by `table_name`. If such a table does not yet exist, it is created as specified in `sql_up`.
 
-Insertion into Hasuragres uses 'upsertion' logic. This means that when inserting rows, if there is already an existing row with the same primary key, we update that row rather than raising an error. If `write_mode` is set to `"overwrite"` (default), any rows that were not inserted or upserted in the current insert operation are also deleted.
+Insertion into Hasuragres uses 'upsertion' logic. This means that when inserting rows, if there is already an existing row with the same primary key, we update that row rather than raising an error. Additionally, if `write_mode` is set to `"overwrite"` (default), any rows that were not inserted or updated in the current insert operation are also deleted.
 
 Hasuragres keeps track of the SQL scripts used to create each table. If there is an inconsistency between the stored `sql_up` script and the one provided in the request, then the table is re-created using the new `sql_up`. The stored `sql_down` is used to drop the old table - it's important that `sql_down` is correct, otherwise updates to the table structure may fail.
 
 When a table is created, it is automatically tracked in Hasura and added to the GraphQL Schema. Three query fields are added in the GraphQL Schema (note that `table_name` will be in lowercase):
 - `<table_name>` - contains all fields/relationships of the table
-- `<table_name>_by_pk` - as above, specifically optimised for querying a single row using 
+- `<table_name>_by_pk` - as above, specifically optimised for querying a single row using the primary key
 - `<table_name>_aggregate` - aggregation operations on the table using the primary key column(s)
 
 Furthermore, any foreign key relationships are inferred, and fields containing nested objects are added to each relevant queryable data type. More information can be found [here](https://hasura.io/docs/latest/getting-started/how-it-works/index/).
