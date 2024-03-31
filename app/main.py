@@ -1,4 +1,5 @@
 import os
+from enum import Enum
 from typing import Any, Literal, Optional
 
 import psycopg2
@@ -10,7 +11,7 @@ from psycopg2.extensions import connection, cursor
 from pydantic import BaseModel, Field
 
 from helpers.auth import validate_api_key
-from helpers.hasura import track_table
+from helpers.hasura import track_table, untrack_table
 
 
 class Metadata(BaseModel):
@@ -22,6 +23,12 @@ class Metadata(BaseModel):
     columns: list[str]  # list of column names that require insertion
     write_mode: Literal['append', 'overwrite'] = Field('overwrite', description='mode in which to write to the database')
     dryrun: bool = Field(False, description='if true, does not commit changes - useful for testing')
+
+
+class CreateTableResult(Enum):
+    NONE = 0
+    UPDATED = 1
+    CREATED = 2
 
 
 conn: connection = None
@@ -53,7 +60,7 @@ except (Exception, Error) as error:
     exit(1)
 
 
-def create_table(metadata: Metadata) -> bool:
+def create_table(metadata: Metadata) -> CreateTableResult:
     """
     Create table as specified in metadata.
 
@@ -79,8 +86,10 @@ def create_table(metadata: Metadata) -> bool:
         cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
         cur.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
 
-        return True
+        return CreateTableResult.CREATED
     elif table_sql[0] != metadata.sql_up:
+        untrack_table(metadata.table_name)
+
         # Re-create
         cur.execute(table_sql[1])  # old sql_down
         cur.execute(metadata.sql_up)
@@ -89,9 +98,9 @@ def create_table(metadata: Metadata) -> bool:
         cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
         cur.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
-        return True
+        return CreateTableResult.UPDATED
 
-    return False
+    return CreateTableResult.NONE
 
 
 def get_primary_key_columns(table_name: str) -> list[str]:
@@ -144,7 +153,7 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
 @app.post("/insert", dependencies=[Depends(validate_api_key)])
 def insert(metadata: Metadata, payload: list[Any]):
     try:
-        created = create_table(metadata)
+        create_table_result = create_table(metadata)
     except (Exception, Error) as error:
         err_msg = "Error while creating PostgreSQL table: " + str(error)
         print(err_msg)
@@ -172,7 +181,10 @@ def insert(metadata: Metadata, payload: list[Any]):
         conn.commit()
 
         # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
-        if created:
+        if create_table_result == CreateTableResult.UPDATED:
+            untrack_table(metadata.table_name.lower())
+
+        if create_table_result == CreateTableResult.UPDATED or create_table_result == CreateTableResult.CREATED:
             track_table(metadata.table_name.lower())
     else:
         conn.rollback()

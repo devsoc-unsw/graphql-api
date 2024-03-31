@@ -122,3 +122,17 @@ def track_table(table_name: str):
         "type": "bulk",
         "args": infer_relationships(table_name)
     })
+
+
+def untrack_table(table_name: str):
+    send_hasura_api_query({
+        "type": "pg_untrack_table",
+        "args": {
+            "source": "default",
+            "cascade": True,
+            "table": {
+                "schema": "public",
+                "name": table_name
+            }
+        }
+    })
