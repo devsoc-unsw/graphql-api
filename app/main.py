@@ -82,6 +82,10 @@ def create_table(metadata: Metadata) -> CreateTableResult:
         # Execute create table
         cur.execute(metadata.sql_up)
 
+        # Test new sql_down
+        cur.execute(metadata.sql_down)
+        cur.execute(metadata.up)
+
         # Store metadata
         cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
         cur.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
@@ -93,6 +97,10 @@ def create_table(metadata: Metadata) -> CreateTableResult:
         # Re-create
         cur.execute(table_sql[1])  # old sql_down
         cur.execute(metadata.sql_up)
+
+        # Test new sql_down
+        cur.execute(metadata.sql_down)
+        cur.execute(metadata.up)
 
         # Store new metadata
         cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
