@@ -64,6 +64,34 @@ except (Exception, Error) as error:
     exit(1)
 
 
+def execute_up_down(metadata: Metadata):
+    # Create table with sql_up
+    try:
+        cur.execute(metadata.sql_up)
+    except Error as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error while executing sql_up of '{metadata.table_name}':\n{e}"
+        )
+
+    # Test sql_down
+    try:
+        cur.execute(metadata.sql_down)
+    except Error as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error while testing sql_down of '{metadata.table_name}':\n{e}"
+        )
+
+    try:
+        cur.execute(metadata.sql_down)
+    except Error as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"sql_down of '{metadata.table_name}' does not fully undo sql_up"
+        )
+
+
 def create_table(metadata: Metadata) -> CreateTableResult:
     """
     Create table as specified in metadata.
@@ -84,11 +112,7 @@ def create_table(metadata: Metadata) -> CreateTableResult:
     table_sql = cur.fetchone()
     if not table_sql:
         # Execute create table
-        cur.execute(metadata.sql_up)
-
-        # Test new sql_down
-        cur.execute(metadata.sql_down)
-        cur.execute(metadata.sql_up)
+        execute_up_down(metadata)
 
         # Store metadata
         cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
@@ -100,11 +124,7 @@ def create_table(metadata: Metadata) -> CreateTableResult:
 
         # Re-create
         cur.execute(table_sql[1])  # old sql_down
-        cur.execute(metadata.sql_up)
-
-        # Test new sql_down
-        cur.execute(metadata.sql_down)
-        cur.execute(metadata.sql_up)
+        execute_up_down(metadata)
 
         # Store new metadata
         cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
@@ -162,42 +182,49 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
     cur.execute(cmd, (values,))
 
 
-def do_insert(metadata: Metadata, payload: list[Any]) -> CreateTableResult:
-    try:
-        create_table_result = create_table(metadata)
-    except (Exception, Error) as error:
-        err_msg = "Error while creating PostgreSQL table \"" + metadata.table_name + "\": " + str(error)
-        print(err_msg)
-        raise HTTPException(status_code=400, detail=err_msg)
-
-    try:
-        if metadata.sql_before:
+def do_insert(metadata: Metadata, payload: list[Any]):
+    if metadata.sql_before:
+        try:
             cur.execute(metadata.sql_before)
+        except Error as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error while executing sql_before of '{metadata.table_name}':\n{e}"
+            )
 
+    try:
         execute_upsert(metadata, payload)
         if metadata.write_mode == 'overwrite':
             # Delete rows not in payload
             execute_delete(metadata, payload)
+    except Error as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error while inserting tuples into '{metadata.table_name}':\n{e}"
+        )
 
-        if metadata.sql_after:
+    if metadata.sql_after:
+        try:
             cur.execute(metadata.sql_after)
-    except (Exception, Error) as error:
-        err_msg = "Error while inserting into PostgreSQL table \"" + metadata.table_name + "\": " + str(error)
-        print(err_msg)
-        raise HTTPException(status_code=400, detail=err_msg)
-
-    return create_table_result
+        except Error as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error while executing sql_after of '{metadata.table_name}':\n{e}"
+            )
 
 
 def do_batch_insert(requests: list[BatchRequest]):
     create_table_results = {}
     for request in requests:
         try:
-            create_table_result = do_insert(request.metadata, request.payload)
+            create_table_result = create_table(request.metadata)
             create_table_results[request.metadata.table_name.lower()] = create_table_result
-        except (Exception, Error) as error:
+
+            do_insert(request.metadata, request.payload)
+        except HTTPException as e:
+            print(e.detail)
             conn.rollback()
-            raise error
+            raise e
 
     conn.commit()
 
