@@ -22,7 +22,11 @@ class Metadata(BaseModel):
     sql_down: str       # SQL to tear DOWN a table (should be the opp. of up)
     columns: list[str]  # list of column names that require insertion
     write_mode: Literal['append', 'overwrite'] = Field('overwrite', description='mode in which to write to the database')
-    dryrun: bool = Field(False, description='if true, does not commit changes - useful for testing')
+
+
+class BatchRequest(BaseModel):
+    metadata: Metadata
+    payload: list[Any]
 
 
 class CreateTableResult(Enum):
@@ -158,14 +162,12 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
     cur.execute(cmd, (values,))
 
 
-@app.post("/insert", dependencies=[Depends(validate_api_key)])
-def insert(metadata: Metadata, payload: list[Any]):
+def do_insert(metadata: Metadata, payload: list[Any]) -> CreateTableResult:
     try:
         create_table_result = create_table(metadata)
     except (Exception, Error) as error:
-        err_msg = "Error while creating PostgreSQL table: " + str(error)
+        err_msg = "Error while creating PostgreSQL table \"" + metadata.table_name + "\" : " + str(error)
         print(err_msg)
-        conn.rollback()
         raise HTTPException(status_code=400, detail=err_msg)
 
     try:
@@ -180,23 +182,43 @@ def insert(metadata: Metadata, payload: list[Any]):
         if metadata.sql_after:
             cur.execute(metadata.sql_after)
     except (Exception, Error) as error:
-        err_msg = "Error while inserting into PostgreSQL table: " + str(error)
+        err_msg = "Error while inserting into PostgreSQL table \"" + metadata.table_name + "\" : " + str(error)
         print(err_msg)
-        conn.rollback()
         raise HTTPException(status_code=400, detail=err_msg)
 
-    if not metadata.dryrun:
-        conn.commit()
+    return create_table_result
 
+
+def do_batch_insert(requests: list[BatchRequest]):
+    create_table_results = {}
+    for request in requests:
+        try:
+            create_table_result = do_insert(request.metadata, request.data)
+            create_table_results[request.metadata.table_name.lower()] = create_table_result
+        except (Exception, Error) as error:
+            conn.rollback()
+            raise error
+
+    conn.commit()
+
+    for table_name, create_table_result in create_table_results.items():
         # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
         if create_table_result == CreateTableResult.UPDATED:
-            untrack_table(metadata.table_name.lower())
+            untrack_table(table_name)
 
         if create_table_result == CreateTableResult.UPDATED or create_table_result == CreateTableResult.CREATED:
-            track_table(metadata.table_name.lower())
-    else:
-        conn.rollback()
+            track_table(table_name)
 
+
+@app.post("/batch_insert", dependencies=[Depends(validate_api_key)])
+def batch_insert(requests: list[BatchRequest]):
+    do_batch_insert(requests)
+    return {}
+
+
+@app.post("/insert", dependencies=[Depends(validate_api_key)])
+def insert(metadata: Metadata, payload: list[Any]):
+    do_batch_insert([BatchRequest(metadata, payload)])
     return {}
 
 
