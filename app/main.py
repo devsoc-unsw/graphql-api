@@ -166,7 +166,7 @@ def do_insert(metadata: Metadata, payload: list[Any]) -> CreateTableResult:
     try:
         create_table_result = create_table(metadata)
     except (Exception, Error) as error:
-        err_msg = "Error while creating PostgreSQL table \"" + metadata.table_name + "\" : " + str(error)
+        err_msg = "Error while creating PostgreSQL table \"" + metadata.table_name + "\": " + str(error)
         print(err_msg)
         raise HTTPException(status_code=400, detail=err_msg)
 
@@ -182,7 +182,7 @@ def do_insert(metadata: Metadata, payload: list[Any]) -> CreateTableResult:
         if metadata.sql_after:
             cur.execute(metadata.sql_after)
     except (Exception, Error) as error:
-        err_msg = "Error while inserting into PostgreSQL table \"" + metadata.table_name + "\" : " + str(error)
+        err_msg = "Error while inserting into PostgreSQL table \"" + metadata.table_name + "\": " + str(error)
         print(err_msg)
         raise HTTPException(status_code=400, detail=err_msg)
 
@@ -193,7 +193,7 @@ def do_batch_insert(requests: list[BatchRequest]):
     create_table_results = {}
     for request in requests:
         try:
-            create_table_result = do_insert(request.metadata, request.data)
+            create_table_result = do_insert(request.metadata, request.payload)
             create_table_results[request.metadata.table_name.lower()] = create_table_result
         except (Exception, Error) as error:
             conn.rollback()
@@ -218,7 +218,7 @@ def batch_insert(requests: list[BatchRequest]):
 
 @app.post("/insert", dependencies=[Depends(validate_api_key)])
 def insert(metadata: Metadata, payload: list[Any]):
-    do_batch_insert([BatchRequest(metadata, payload)])
+    do_batch_insert([BatchRequest(metadata=metadata, payload=payload)])
     return {}
 
 
