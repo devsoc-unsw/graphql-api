@@ -49,11 +49,11 @@ def execute_up_down(metadata: Metadata):
         )
 
     try:
-        cur.execute(metadata.sql_down)
+        cur.execute(metadata.sql_up)
     except Error as e:
         raise HTTPException(
             status_code=400,
-            detail=f"sql_down of '{metadata.table_name}' does not fully undo sql_up"
+            detail=f"sql_down of '{metadata.table_name}' does not fully undo sql_up:\n{e}"
         )
 
 

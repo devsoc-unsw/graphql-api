@@ -76,6 +76,30 @@ X-API-Key: my_key
 
 ```
 
+### POST `/batch_insert` Route
+If you have a scraper which scrapes data for and inserts into multiple tables at once, you can use the `/batch_insert` route. This route ensures that if one of the inserts fails, none of the inserts will be committed.
+
+The `/batch_insert` route accepts a list of objects containing `metadata` and `payload` (note that this list is not in an object, the top level JSON entity in the body of the request is the list).
+
+Example:
+```http request
+POST /batch_insert HTTP/1.1
+Content-Type: application/json
+X-API-Key: my_key
+
+[
+    {
+        "metadata": { ... },
+        "payload": [ ... ]
+    },
+    {
+        "metadata": { ... },
+        "payload": [ ... ]
+    },
+    ...
+]
+```
+
 ## Multiple Scrapers for One Table
 
 If you want to connect multiple scrapers to the same table, for example if you have multiple data sources, then Hasuragres is able to support this. Follow the guidelines below to set this up.
