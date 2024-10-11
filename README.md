@@ -8,10 +8,12 @@ DevSoc provides a GraphQL API for all the data scraped and used for its various 
 
 This API provides data on:
 - Buildings, rooms and room bookings (as seen in Freerooms)
-- **[COMING SOON]** Course and class schedules (as seen in Notangles)
+- Course and class schedules (as seen in Notangles)
 - **[COMING SOON]** Course information (as seen in Circles and Unilectives)
 
-The API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks in to an existing database and automatically generates and exposes a rich GraphQL API for the data stored within. The underlying database we use is [Postgres](https://www.postgresql.org/), hence the name **Hasuragres**.
+The full schema can be found [here](https://devsoc.atlassian.net/wiki/spaces/GA/pages/184352772/Schema).
+
+Our API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks in to an existing database and automatically generates and exposes a rich GraphQL API for the data stored within. The underlying database we use is [Postgres](https://www.postgresql.org/), hence the name **Hasuragres**.
 
 ## Interactive Explorer
 ![Interactive explorer](docs/explorer.png)
