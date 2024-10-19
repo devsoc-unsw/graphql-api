@@ -7,6 +7,7 @@ from psycopg2 import Error
 from psycopg2.extensions import connection, cursor
 
 from helpers.hasura import untrack_table, track_table
+from helpers.timer import Timer
 from models import Metadata, BatchRequest, CreateTableResult
 
 conn: connection = None
@@ -148,6 +149,7 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
 
 
 def do_insert(metadata: Metadata, payload: list[Any]):
+    t = Timer(f"sql_before of {metadata.table_name}").start()
     if metadata.sql_before:
         try:
             cur.execute(metadata.sql_before)
@@ -156,7 +158,9 @@ def do_insert(metadata: Metadata, payload: list[Any]):
                 status_code=400,
                 detail=f"Error while executing sql_before of '{metadata.table_name}':\n{e}"
             )
+    t.stop()
 
+    t = Timer(f"insert of {metadata.table_name}").start()
     try:
         execute_upsert(metadata, payload)
         if metadata.write_mode == 'overwrite':
@@ -167,7 +171,9 @@ def do_insert(metadata: Metadata, payload: list[Any]):
             status_code=400,
             detail=f"Error while inserting tuples into '{metadata.table_name}':\n{e}"
         )
+    t.stop()
 
+    t = Timer(f"sql_after of {metadata.table_name}").start()
     if metadata.sql_after:
         try:
             cur.execute(metadata.sql_after)
@@ -176,6 +182,7 @@ def do_insert(metadata: Metadata, payload: list[Any]):
                 status_code=400,
                 detail=f"Error while executing sql_after of '{metadata.table_name}':\n{e}"
             )
+    t.stop()
 
 
 def do_batch_insert(requests: list[BatchRequest]):
