@@ -3,34 +3,35 @@ from typing import Any
 
 import psycopg2
 from fastapi import HTTPException
-from psycopg2 import Error
+from psycopg2 import Error, pool
 from psycopg2.extensions import connection, cursor
 
 from helpers.hasura import untrack_table, track_table
 from helpers.timer import Timer
 from models import Metadata, BatchRequest, CreateTableResult
 
-conn: connection = None
-cur: cursor = None
-
-try:
-    conn = psycopg2.connect(user=os.environ.get('POSTGRES_USER'),
-                            password=os.environ.get('POSTGRES_PASSWORD'),
-                            host=os.environ.get('POSTGRES_HOST'),
-                            port=os.environ.get('POSTGRES_PORT'),
-                            database=os.environ.get('POSTGRES_DB'))
-    cur = conn.cursor()
-except (Exception, Error) as error:
-    print("Error while connecting to PostgreSQL", error)
-    if conn:
-        conn.close()
-        if cur:
-            cur.close()
-        print("PostgreSQL connection is closed")
-    exit(1)
+psql_pool = psycopg2.pool.ThreadedConnectionPool(1, 10,
+                                                 user=os.environ.get('POSTGRES_USER'),
+                                                 password=os.environ.get('POSTGRES_PASSWORD'),
+                                                 host=os.environ.get('POSTGRES_HOST'),
+                                                 port=os.environ.get('POSTGRES_PORT'),
+                                                 database=os.environ.get('POSTGRES_DB'))
 
 
-def execute_up_down(metadata: Metadata):
+# FastAPI dependency
+# See https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/
+def get_db_conn():
+    conn = psql_pool.getconn()
+    try:
+        yield conn
+    finally:
+        psql_pool.putconn(conn)
+
+
+def shutdown_db():
+    psql_pool.closeall()
+
+def execute_up_down(cur: cursor, metadata: Metadata):
     # Create table with sql_up
     try:
         cur.execute(metadata.sql_up)
@@ -58,7 +59,7 @@ def execute_up_down(metadata: Metadata):
         )
 
 
-def create_table(metadata: Metadata) -> CreateTableResult:
+def create_table(cur: cursor, metadata: Metadata) -> CreateTableResult:
     """
     Create table as specified in metadata.
 
@@ -72,16 +73,16 @@ def create_table(metadata: Metadata) -> CreateTableResult:
     # Initialise Tables table if not already
     cur.execute(open("app/init.sql", "r").read())
 
-    cmd = r"SELECT up, down FROM Tables WHERE table_name = %s"
+    cmd = r"SELECT up, down FROM tables WHERE table_name = %s"
     metadata.table_name = metadata.table_name.lower()
     cur.execute(cmd, (metadata.table_name,))
     table_sql = cur.fetchone()
     if not table_sql:
         # Execute create table
-        execute_up_down(metadata)
+        execute_up_down(cur, metadata)
 
         # Store metadata
-        cmd = r"INSERT INTO Tables(table_name, up, down) VALUES (%s, %s, %s)"
+        cmd = r"INSERT INTO tables(table_name, up, down) VALUES (%s, %s, %s)"
         cur.execute(cmd, (metadata.table_name, metadata.sql_up, metadata.sql_down))
 
         return CreateTableResult.CREATED
@@ -90,10 +91,10 @@ def create_table(metadata: Metadata) -> CreateTableResult:
 
         # Re-create
         cur.execute(table_sql[1])  # old sql_down
-        execute_up_down(metadata)
+        execute_up_down(cur, metadata)
 
         # Store new metadata
-        cmd = r"UPDATE Tables SET up = %s, down = %s WHERE table_name = %s"
+        cmd = r"UPDATE tables SET up = %s, down = %s WHERE table_name = %s"
         cur.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
         return CreateTableResult.UPDATED
@@ -101,7 +102,7 @@ def create_table(metadata: Metadata) -> CreateTableResult:
     return CreateTableResult.NONE
 
 
-def get_primary_key_columns(table_name: str) -> list[str]:
+def get_primary_key_columns(cur: cursor, table_name: str) -> list[str]:
     cmd = f"""
         SELECT c.column_name
         FROM information_schema.columns c
@@ -119,9 +120,9 @@ def get_primary_key_columns(table_name: str) -> list[str]:
     return [row[0] for row in cur.fetchall()]
 
 
-def execute_upsert(metadata: Metadata, payload: list[Any]):
+def execute_upsert(cur: cursor, metadata: Metadata, payload: list[Any]):
     columns = [f'"{col}"' for col in metadata.columns]
-    key_columns = [f'"{col}"' for col in get_primary_key_columns(metadata.table_name)]
+    key_columns = [f'"{col}"' for col in get_primary_key_columns(cur, metadata.table_name)]
     non_key_columns = [col for col in columns if col not in key_columns]
 
     cmd = f"""
@@ -135,8 +136,8 @@ def execute_upsert(metadata: Metadata, payload: list[Any]):
     cur.executemany(cmd, values)
 
 
-def execute_delete(metadata: Metadata, payload: list[Any]):
-    key_columns = get_primary_key_columns(metadata.table_name)
+def execute_delete(cur: cursor, metadata: Metadata, payload: list[Any]):
+    key_columns = get_primary_key_columns(cur, metadata.table_name)
     quoted_key_columns = [f'"{col}"' for col in key_columns]
 
     cmd = f"""
@@ -148,7 +149,7 @@ def execute_delete(metadata: Metadata, payload: list[Any]):
     cur.execute(cmd, (values,))
 
 
-def do_insert(metadata: Metadata, payload: list[Any]):
+def do_insert(cur: cursor, metadata: Metadata, payload: list[Any]):
     t = Timer(f"sql_before of {metadata.table_name}").start()
     if metadata.sql_before:
         try:
@@ -162,10 +163,10 @@ def do_insert(metadata: Metadata, payload: list[Any]):
 
     t = Timer(f"insert of {metadata.table_name}").start()
     try:
-        execute_upsert(metadata, payload)
+        execute_upsert(cur, metadata, payload)
         if metadata.write_mode == 'overwrite':
             # Delete rows not in payload
-            execute_delete(metadata, payload)
+            execute_delete(cur, metadata, payload)
     except Error as e:
         raise HTTPException(
             status_code=400,
@@ -185,14 +186,16 @@ def do_insert(metadata: Metadata, payload: list[Any]):
     t.stop()
 
 
-def do_batch_insert(requests: list[BatchRequest]):
+def do_batch_insert(conn: connection, requests: list[BatchRequest]):
+    cur = conn.cursor()
+
     create_table_results = {}
     for request in requests:
         try:
-            create_table_result = create_table(request.metadata)
+            create_table_result = create_table(cur, request.metadata)
             create_table_results[request.metadata.table_name.lower()] = create_table_result
 
-            do_insert(request.metadata, request.payload)
+            do_insert(cur, request.metadata, request.payload)
         except HTTPException as e:
             print(e.detail)
             conn.rollback()
