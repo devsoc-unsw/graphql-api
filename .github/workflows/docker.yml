@@ -45,8 +45,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
-          repository: csesoc/deployment
-          ref: migration
+          repository: devsoc-unsw/deployment
+          ref: dev
           token: ${{ secrets.GH_TOKEN }}
       - name: Install yq
         uses: mikefarah/yq@v4.40.5
@@ -63,5 +63,5 @@ jobs:
           git add . 
           git commit -m "feat(hasuragres): update image" 
           git push -u origin update/hasuragres/${{ github.sha }}
-          gh pr create -B migration --title "feat(hasuragres): update image" --body "Updates the image for the hasuragres deployment to commit devsoc-unsw/hasuragres@${{ github.sha }}." > URL
+          gh pr create -B dev --title "feat(hasuragres): update image" --body "Updates the image for the hasuragres deployment to commit devsoc-unsw/hasuragres@${{ github.sha }}." > URL
           gh pr merge $(cat URL) --squash -d
