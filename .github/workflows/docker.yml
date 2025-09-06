@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - "master"
+      - "staging"
+
+env:
+  ENVIRONMENT: ${{ github.ref_name == 'master' && 'prod' || 'staging' }}
+  IMAGE_NAME: ${{ github.ref_name == 'master' && 'hasuragres' || 'hasuragres-staging' }}
 
 jobs:
   build:
@@ -31,8 +36,8 @@ jobs:
           platforms: linux/amd64
           file: Dockerfile
           tags: |
-            ghcr.io/devsoc-unsw/hasuragres:${{ github.sha }}
-            ghcr.io/devsoc-unsw/hasuragres:latest
+            ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/devsoc-unsw/${{ env.IMAGGE_NAME }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -57,11 +62,11 @@ jobs:
           git config user.name "CSESoc CD"
           git config user.email "technical@csesoc.org.au"
 
-          git checkout -b update/hasuragres/${{ github.sha }}
-          yq -i '.items[0].spec.template.spec.containers[0].image = "ghcr.io/devsoc-unsw/hasuragres:${{ github.sha }}"' projects/hasuragres/hasuragres.yml
+          git checkout -b update/${{ env.IMAGE_NAME }}/${{ github.sha }}
+          yq -i '.items[0].spec.template.spec.containers[0].image = "ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME}:${{ github.sha }}"' projects/hasuragres/${{ env.ENVIRONMENT }}/hasuragres.yml
 
           git add . 
-          git commit -m "feat(hasuragres): update image" 
-          git push -u origin update/hasuragres/${{ github.sha }}
-          gh pr create -B dev --title "feat(hasuragres): update image" --body "Updates the image for the hasuragres deployment to commit devsoc-unsw/hasuragres@${{ github.sha }}." > URL
+          git commit -m "feat(${{ env.IMAGE_NAME }}): update image" 
+          git push -u origin update/${{ env.IMAGE_NAME }}/${{ github.sha }}
+          gh pr create -B dev --title "feat(${{ env.IMAGE_NAME}}): update image" --body "Updates the image for the ${{ env.IMAGE_NAME }} deployment to commit devsoc-unsw/${{ env.IMAGE_NAME }}@${{ github.sha }}." > URL
           gh pr merge $(cat URL) --squash -d
