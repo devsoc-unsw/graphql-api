@@ -37,7 +37,7 @@ jobs:
           file: Dockerfile
           tags: |
             ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ghcr.io/devsoc-unsw/${{ env.IMAGGE_NAME }}:latest
+            ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
