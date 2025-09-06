@@ -63,10 +63,10 @@ jobs:
           git config user.email "technical@csesoc.org.au"
 
           git checkout -b update/${{ env.IMAGE_NAME }}/${{ github.sha }}
-          yq -i '.items[0].spec.template.spec.containers[0].image = "ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME}:${{ github.sha }}"' projects/hasuragres/${{ env.ENVIRONMENT }}/hasuragres.yml
+          yq -i '.items[0].spec.template.spec.containers[0].image = "ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:${{ github.sha }}"' projects/hasuragres/${{ env.ENVIRONMENT }}/hasuragres.yml
 
           git add . 
           git commit -m "feat(${{ env.IMAGE_NAME }}): update image" 
           git push -u origin update/${{ env.IMAGE_NAME }}/${{ github.sha }}
-          gh pr create -B dev --title "feat(${{ env.IMAGE_NAME}}): update image" --body "Updates the image for the ${{ env.IMAGE_NAME }} deployment to commit devsoc-unsw/${{ env.IMAGE_NAME }}@${{ github.sha }}." > URL
+          gh pr create -B dev --title "feat(${{ env.IMAGE_NAME }}): update image" --body "Updates the image for the ${{ env.IMAGE_NAME }} deployment to commit devsoc-unsw/${{ env.IMAGE_NAME }}@${{ github.sha }}." > URL
           gh pr merge $(cat URL) --squash -d
