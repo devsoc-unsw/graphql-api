@@ -34,6 +34,7 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile
+          push: true
           tags: |
             ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ghcr.io/devsoc-unsw/${{ env.IMAGE_NAME }}:latest
