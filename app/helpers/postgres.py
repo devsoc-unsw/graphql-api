@@ -98,6 +98,9 @@ def create_table(cur: cursor, metadata: Metadata) -> CreateTableResult:
         cur.execute(cmd, (metadata.sql_up, metadata.sql_down, metadata.table_name))
 
         return CreateTableResult.UPDATED
+    
+    print("table_sql:", table_sql)
+    print("metadata.sql_up:", metadata.sql_up)
 
     return CreateTableResult.NONE
 
@@ -202,6 +205,42 @@ def do_batch_insert(conn: connection, requests: list[BatchRequest]):
             raise e
 
     conn.commit()
+
+    print("got past creating table, create_table_results:", create_table_results)
+
+    for table_name, create_table_result in create_table_results.items():
+        # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table
+        if create_table_result == CreateTableResult.UPDATED:
+            print("Untracking table in Hasura:", table_name)
+            untrack_table(table_name)
+
+        if create_table_result == CreateTableResult.UPDATED or create_table_result == CreateTableResult.CREATED:
+            print("Tracking table in Hasura:", table_name)
+            track_table(table_name)
+
+
+def do_batch_update(conn: connection, requests: list[BatchRequest]):
+    cur = conn.cursor()
+
+    create_table_results = {}
+    for request in requests:
+        try:
+            print("Working on updating table:", request.metadata.table_name)
+
+            # We don't create the table, we assume it already exists (and error if not).
+            # TODO: error if table does not exist with passed specified schema
+
+            create_table_results[request.metadata.table_name.lower()] = CreateTableResult.UPDATED
+
+            do_insert(cur, request.metadata, request.payload)
+        except HTTPException as e:
+            print(e.detail)
+            conn.rollback()
+            raise e
+
+    conn.commit()
+
+    print("got past inserting into table, create_table_results:", create_table_results)
 
     for table_name, create_table_result in create_table_results.items():
         # Run Hasura actions - must be done after transaction committed otherwise Hasura won't see the table

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2.extensions import connection
 
-from helpers.postgres import do_batch_insert, get_db_conn, shutdown_db
+from helpers.postgres import do_batch_insert, get_db_conn, shutdown_db, do_batch_update
 from helpers.auth import validate_api_key
 from models import Metadata, BatchRequest
 
@@ -35,6 +35,12 @@ def batch_insert(requests: list[BatchRequest], conn: Annotated[connection, Depen
 @app.post("/insert", dependencies=[Depends(validate_api_key)])
 def insert(metadata: Metadata, payload: list[Any], conn: Annotated[connection, Depends(get_db_conn)]):
     do_batch_insert(conn, [BatchRequest(metadata=metadata, payload=payload)])
+    return {}
+
+
+@app.post("/batch_update", dependencies=[Depends(validate_api_key)])
+def batch_update(metadata: Metadata, payload: list[Any], conn: Annotated[connection, Depends(get_db_conn)]):
+    do_batch_update(conn, [BatchRequest(metadata=metadata, payload=payload)])
     return {}
 
 
