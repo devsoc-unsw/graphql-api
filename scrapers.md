@@ -116,7 +116,7 @@ It is also important that you make use of the `sql_before` and `write_mode` fiel
 
 The recommended way to test whether the scraper is connected correctly is to run Hasuragres locally, attempt to connect to the local instance of Hasuragres and, if that works without errors, manually inspect the Hasura console to check the data appears correct.
 
-To run Hasuragres locally, clone this repo, then in the root directly of the repo, run `docker compose up -d` (you will need Docker Desktop). This will use port 8000 for connecting scrapers, and port 8080 for Hasura. These ports can be configured in the `.env` file.
+To run Hasuragres locally, clone this repo, then in the root directory of the repo, run `docker compose up --build --detach --wait` (you will need Docker Desktop). Compose will wait for Postgres, Hasura, and Hasuragres to become healthy before returning. This will use port 8000 for connecting scrapers, and port 8080 for Hasura. These ports can be configured in the `.env` file.
 
 As described above, your scraper should use the environment variables `HASURAGRES_URL` and `HASURAGRES_API_KEY`. Set these to `http://localhost:8000` and `my_key` respectively (or whatever you have configured them to in `.env`) and run your scraper.
 
