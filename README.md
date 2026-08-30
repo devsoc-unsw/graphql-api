@@ -18,7 +18,7 @@ Our API is powered by [Hasura](https://hasura.io/) - a powerful tool that hooks 
 ## Interactive Explorer
 ![Interactive explorer](docs/explorer.png)
 
-You can explore Hasuragres using our [interactive explorer](https://cloud.hasura.io/public/graphiql?endpoint=https%3A%2F%2Fgraphql.csesoc.app%2Fv1%2Fgraphql). In this explorer, you can:
+You can explore Hasuragres using our [interactive explorer](https://cloud.hasura.io/public-graphiql/?endpoint=https%3A%2F%2Fgraphql.devsoc.app%2Fv1%2Fgraphql). In this explorer, you can:
 - See the full GraphQL schema
 - Experiment with building your own queries
 - Execute queries on the data
